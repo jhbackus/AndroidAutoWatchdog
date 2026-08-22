@@ -20,9 +20,44 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build debug APK
-        run: gradle assembleDebug --stacktrace
+
+      - name: Build unsigned release APK
+        run: gradle assembleRelease --stacktrace
+
+      - name: Create permanent signing key and sign APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p signing-output
+          PASS=$(openssl rand -hex 32)
+          printf '%s' "$PASS" > signing-output/keystore-password.txt
+          keytool -genkeypair -v \
+            -keystore signing-output/android-auto-watchdog-release.p12 \
+            -storetype PKCS12 \
+            -storepass "$PASS" -keypass "$PASS" \
+            -alias androidautowatchdog \
+            -keyalg RSA -keysize 4096 -sigalg SHA256withRSA \
+            -validity 10000 \
+            -dname "CN=Android Auto Watchdog, OU=Private Build, O=Android Auto Watchdog, L=Amsterdam, C=NL"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          test -n "$APKSIGNER"
+          UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
+          test -f "$UNSIGNED"
+          "$APKSIGNER" sign \
+            --ks signing-output/android-auto-watchdog-release.p12 \
+            --ks-type PKCS12 \
+            --ks-key-alias androidautowatchdog \
+            --ks-pass "pass:$PASS" \
+            --key-pass "pass:$PASS" \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out signing-output/AndroidAutoWatchdog-v1.4-final.apk \
+            "$UNSIGNED"
+          "$APKSIGNER" verify --verbose --print-certs signing-output/AndroidAutoWatchdog-v1.4-final.apk | tee signing-output/signing-verification.txt
+          sha256sum signing-output/AndroidAutoWatchdog-v1.4-final.apk | tee signing-output/sha256.txt
+
       - uses: actions/upload-artifact@v4
         with:
-          name: AndroidAutoWatchdog-v1.3-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: AndroidAutoWatchdog-v1.4-permanent-signing
+          path: signing-output/

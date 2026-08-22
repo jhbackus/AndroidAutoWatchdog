@@ -2,4 +2,4 @@
 
 Gerichte watchdog voor Honor / MagicOS wanneer gewone Wi-Fi blijft werken, maar wireless Android Auto na één of enkele dagen niet meer wil verbinden/starten.
 
-Dit project bevat een begeleide installatie, foreground watchdog, Bluetooth-trigger, Shizuku-integratie en diagnostiek. Zie de app voor verdere instructies.
+De broncode staat in `AndroidAutoWatchdog-source-v1.3.zip`. GitHub Actions pakt die automatisch uit, bouwt de debug-APK en publiceert die als artifact.

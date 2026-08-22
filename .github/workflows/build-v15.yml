@@ -1,8 +1,8 @@
 name: Build v1.5 signed APK
 
 on:
-  pull_request:
-    branches: [ main ]
+  push:
+    branches: [ v1.5-shizuku-fix ]
 
 permissions:
   contents: read

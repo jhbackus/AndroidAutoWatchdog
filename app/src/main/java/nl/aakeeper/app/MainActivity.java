@@ -81,6 +81,11 @@ public class MainActivity extends Activity {
 
         root.addView(section("Honor / Android instellingen"));
         Button battery = button("BATTERIJOPTIMALISATIE UITSLUITEN"); root.addView(battery); battery.setOnClickListener(v -> requestBatteryExemption());
+        if (isHonorDevice()) {
+            Button honorDone = button("IK HEB HONOR APP LAUNCH INGESTELD");
+            root.addView(honorDone);
+            honorDone.setOnClickListener(v -> confirmHonorLaunch());
+        }
         Button app = button("OPEN APP-INSTELLINGEN"); root.addView(app); app.setOnClickListener(v -> safeStart(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))));
         Button aa = button("OPEN ANDROID AUTO"); root.addView(aa); aa.setOnClickListener(v -> openAndroidAuto());
 
@@ -112,7 +117,7 @@ public class MainActivity extends Activity {
         if (!hasBluetoothPermission()) { setupStatus.setText("Stap 1/6 • Sta Bluetooth toe voor de auto-trigger."); if (!already("BT") && Build.VERSION.SDK_INT >= 31) requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, REQ_BT); return; }
         if (!hasNotificationPermission()) { setupStatus.setText("Stap 2/6 • Sta notificaties toe voor de watchdog-service."); if (!already("NOTIF") && Build.VERSION.SDK_INT >= 33) requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIF); return; }
         if (!isBatteryExempt()) { setupStatus.setText("Stap 3/6 • Sluit de Watchdog uit van batterijoptimalisatie."); if (!already("BATTERY")) requestBatteryExemption(); return; }
-        if (isHonorDevice() && !LogStore.isHonorLaunchConfirmed(this)) { setupStatus.setText("Stap 4/6 • Honor App launch moet eenmalig handmatig worden ingesteld."); if (!already("HONOR")) showHonorGuide(); return; }
+        if (isHonorDevice() && !LogStore.isHonorLaunchConfirmed(this)) { setupStatus.setText("Stap 4/6 • Stel Honor App launch handmatig in en bevestig daarna in deze app."); if (!already("HONOR")) showHonorGuide(); return; }
         if (!packageInstalled(SHIZUKU)) { setupStatus.setText("Stap 5/6 • Installeer Shizuku; dit mag Android niet stil door een andere app laten doen."); if (!already("INSTALL")) openShizukuStore(); return; }
         if (!ShizukuBridge.binderAlive()) { setupStatus.setText("Stap 5/6 • Start Shizuku via draadloos debuggen en keer terug."); if (!already("START")) openShizukuApp(); return; }
         if (!ShizukuBridge.permissionGranted()) { setupStatus.setText("Stap 6/6 • Geef deze Watchdog toestemming in Shizuku."); if (!already("PERM")) ShizukuBridge.requestPermission(); return; }
@@ -121,9 +126,19 @@ public class MainActivity extends Activity {
 
     private void showHonorGuide() {
         new AlertDialog.Builder(this).setTitle("Honor App launch")
-                .setMessage("Open de app-instellingen en ga in MagicOS naar App launch / Automatisch starten. Zet voor Android Auto Watchdog 'Automatisch beheren' UIT en sta toe: Automatisch starten, Secundair starten en Uitvoeren op achtergrond. Vergrendel de app daarna ook in Recente apps indien MagicOS die optie toont.\n\nTik daarna hier op Gereed.")
-                .setPositiveButton("Open instellingen", (d,w) -> safeStart(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))))
-                .setNegativeButton("Gereed", (d,w) -> { LogStore.setHonorLaunchConfirmed(this, true); lastStep = ""; continueSoon(); }).show();
+                .setMessage("Ga in MagicOS naar App launch / Automatisch starten. Zet voor Android Auto Watchdog 'Automatisch beheren' UIT en sta toe: Automatisch starten, Secundair starten en Uitvoeren op achtergrond. Vergrendel de app daarna ook in Recente apps indien MagicOS die optie toont.\n\nMagicOS geeft andere apps geen betrouwbare API om deze instelling uit te lezen. Daarom bevestig je deze stap handmatig.")
+                .setPositiveButton("Ik heb dit ingesteld", (d,w) -> confirmHonorLaunch())
+                .setNeutralButton("Open instellingen", (d,w) -> safeStart(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))))
+                .setNegativeButton("Later", null).show();
+    }
+
+    private void confirmHonorLaunch() {
+        LogStore.setHonorLaunchConfirmed(this, true);
+        LogStore.add(this, "Honor App launch handmatig bevestigd door gebruiker.");
+        lastStep = "";
+        setupStarted = true;
+        refresh();
+        continueSoon();
     }
 
     private void finishSetup() {
@@ -153,7 +168,7 @@ public class MainActivity extends Activity {
                 "\nBluetooth: " + (hasBluetoothPermission() ? "toegestaan ✓" : "toestemming ontbreekt") +
                 "\nAuto-filter: " + (target.isEmpty() ? "alle apparaten" : target) +
                 "\nBatterijoptimalisatie: " + (isBatteryExempt() ? "uitgesloten ✓" : "actief") +
-                "\nHonor App launch: " + (!isHonorDevice() || LogStore.isHonorLaunchConfirmed(this) ? "bevestigd ✓" : "nog instellen") +
+                "\nHonor App launch: " + (!isHonorDevice() || LogStore.isHonorLaunchConfirmed(this) ? "bevestigd ✓" : "handmatige bevestiging nodig") +
                 "\nAndroid Auto: " + (packageInstalled(AA) ? "gevonden ✓" : "niet gevonden"));
         toggle.setText(LogStore.isEnabled(this) ? "STOP WATCHDOG" : "START WATCHDOG");
         shizukuStatus.setText(ShizukuBridge.status());
@@ -161,7 +176,7 @@ public class MainActivity extends Activity {
         log.setText(deviceInfo() + "\n\n--- LOG ---\n" + LogStore.get(this));
     }
 
-    private String deviceInfo() { return "Android Auto Watchdog 1.3.0\n" + Build.MANUFACTURER + " " + Build.MODEL + "\nAndroid " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n" + ShizukuBridge.status(); }
+    private String deviceInfo() { return "Android Auto Watchdog 1.4.0\n" + Build.MANUFACTURER + " " + Build.MODEL + "\nAndroid " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n" + ShizukuBridge.status(); }
     private String compact(String s) { if (s == null) return "geen resultaat"; String x = s.replace('\n',' ').replaceAll("\\s+"," ").trim(); return x.length() > 900 ? x.substring(0,900) + "…" : x; }
     private boolean hasBluetoothPermission() { return Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED; }
     private boolean hasNotificationPermission() { return Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED; }

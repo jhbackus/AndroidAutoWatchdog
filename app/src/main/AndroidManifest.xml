@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="moe.shizuku.manager.permission.API_V23"/>
 
     <queries>
         <package android:name="com.google.android.projection.gearhead"/>
@@ -16,6 +17,14 @@
     </queries>
 
     <application android:allowBackup="true" android:label="Android Auto Watchdog" android:theme="@style/Theme.AAKeeper" android:usesCleartextTraffic="false">
+        <meta-data android:name="moe.shizuku.client.V3_SUPPORT" android:value="true"/>
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL"/>
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

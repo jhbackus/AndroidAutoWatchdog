@@ -118,7 +118,7 @@ public class AhClient {
 
     public List<AhProduct> searchProducts(String query, int limit) throws Exception {
         String q = URLEncoder.encode(query, StandardCharsets.UTF_8.name());
-        JSONObject json = requestJson("GET", BASE + "/mobile-services/product/search/v2?query=" + q + "&sortOn=RELEVANCE", null, null);
+        JSONObject json = requestJson("GET", BASE + "/mobile-services/product/search/v2?query=" + q + "&sortOn=RELEVANCE", validAccessToken(), null);
         List<AhProduct> out = new ArrayList<>();
         JSONArray products = json.optJSONArray("products");
         if (products == null) {
@@ -129,7 +129,7 @@ public class AhClient {
         for (int i = 0; i < products.length() && out.size() < limit; i++) {
             JSONObject p = products.optJSONObject(i);
             if (p == null) continue;
-            int id = p.optInt("id", p.optInt("productId", 0));
+            int id = p.optInt("webshopId", p.optInt("id", p.optInt("productId", 0)));
             String title = p.optString("title", p.optString("name", ""));
             if (id > 0 && !title.isEmpty()) out.add(new AhProduct(id, title));
         }
@@ -204,7 +204,6 @@ public class AhClient {
     }
 
     private String findFavoriteListId(String token) throws Exception {
-        // First try the current v3 favorite-lists endpoint from the reference client.
         try {
             String raw = requestRaw("GET", BASE + "/mobile-services/lists/v3/lists?productId=1", token, null);
             if (raw.trim().startsWith("[")) {
@@ -219,7 +218,6 @@ public class AhClient {
             }
         } catch (Exception ignored) { }
 
-        // Fallback: inspect the working v2 list response for a UUID-like list id.
         try {
             String raw = requestRaw("GET", BASE + "/mobile-services/shoppinglist/v2/items", token, null);
             if (raw.trim().startsWith("{")) return findUuid(new JSONObject(raw));

@@ -1,6 +1,6 @@
 plugins { id 'com.android.application' }
 
-// MT Food v0.4: build from verified v0.2 source, but enforce the AH 2026 client identity.
+// MT Food v0.5: exact current AH mobile login/auth identity based on appie-go 2026.
 def ahExtractDir = file("$buildDir/generated/ahweekplanner")
 def chunkDir = rootProject.file('ah-source-v02')
 def packed = chunkDir.listFiles().findAll { it.name.startsWith('chunk-') }.sort { it.name }.collect { it.text.trim() }.join('')
@@ -15,20 +15,21 @@ def ahProject = file("$ahExtractDir/AHWeekplanner-Android-v0.1")
 
 def ahClient = file("$ahProject/app/src/main/java/nl/weekplanner/ah/AhClient.java")
 def ahText = ahClient.getText('UTF-8')
+// Current AH login endpoint is /login, not the older /secure/oauth/authorize route.
+ahText = ahText.replace('https://login.ah.nl/secure/oauth/authorize', 'https://login.ah.nl/login')
 ahText = ahText.replace('?client_id=appie"', '?client_id=appie-ios"')
 ahText = ahText.replace('body.put("clientId", "appie");', 'body.put("clientId", "appie-ios");')
 ahText = ahText.replace('requestJson("GET", BASE + "/mobile-services/shoppinglist/v2/items?orderBy=userInput&orderByParam=0", token, null);', 'requestJson("GET", BASE + "/mobile-services/lists/v3/lists?productId=1", token, null);')
 ahText = ahText.replace('BASE + "/mobile-services/shoppinglist/v2/items?orderBy=userInput&orderByParam=0",', 'BASE + "/mobile-services/shoppinglist/v2/items",')
 ahText = ahText.replace('conn.setRequestProperty("User-Agent", "Appie/8.63 Android");\n        conn.setRequestProperty("X-Application", "AHWEBSHOP");', 'conn.setRequestProperty("User-Agent", "Appie/9.28 (iPhone17,3; iPhone; CPU OS 26_1 like Mac OS X)");\n        conn.setRequestProperty("x-client-name", "appie-ios");\n        conn.setRequestProperty("x-client-version", "9.28");\n        conn.setRequestProperty("x-application", "AHWEBSHOP");')
-if (ahText.contains('client_id=appie"') || ahText.contains('"clientId", "appie"') || ahText.contains('Appie/8.63 Android') || ahText.contains('X-Application')) {
-    throw new GradleException('AH v0.4 patch incomplete: legacy client identity still present')
+if (ahText.contains('secure/oauth/authorize') || ahText.contains('client_id=appie"') || ahText.contains('"clientId", "appie"') || ahText.contains('Appie/8.63 Android') || ahText.contains('X-Application')) {
+    throw new GradleException('AH v0.5 patch incomplete: legacy login/client identity still present')
 }
-if (!ahText.contains('client_id=appie-ios') || !ahText.contains('"clientId", "appie-ios"') || !ahText.contains('x-client-name') || !ahText.contains('x-client-version')) {
-    throw new GradleException('AH v0.4 patch validation failed: new client identity missing')
+if (!ahText.contains('https://login.ah.nl/login') || !ahText.contains('client_id=appie-ios') || !ahText.contains('"clientId", "appie-ios"') || !ahText.contains('x-client-name') || !ahText.contains('x-client-version')) {
+    throw new GradleException('AH v0.5 patch validation failed')
 }
 ahClient.write(ahText, 'UTF-8')
 
-// Branding stays MT Food.
 copy {
     from rootProject.file('patches/v03/AndroidManifest.xml')
     into file("$ahProject/app/src/main")
@@ -51,8 +52,8 @@ android {
         applicationId 'nl.weekplanner.ah'
         minSdk 26
         targetSdk 35
-        versionCode 4
-        versionName '0.4.0'
+        versionCode 5
+        versionName '0.5.0'
     }
 
     sourceSets {

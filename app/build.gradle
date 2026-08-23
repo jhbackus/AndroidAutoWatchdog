@@ -1,10 +1,13 @@
 plugins { id 'com.android.application' }
 
-// Temporary build branch: unpack the AH Weekplanner source archive and compile it
-// through the already-proven AndroidAutoWatchdog CI toolchain.
+// AH Weekplanner v0.2 build through the existing Android CI toolchain.
 def ahExtractDir = file("$buildDir/generated/ahweekplanner")
+def packed = rootProject.file('AHWeekplanner-Android-v0.2-source.b64').text.replaceAll('\\s','')
+def zipFile = file("$buildDir/generated/AHWeekplanner-Android-v0.2-source.zip")
+zipFile.parentFile.mkdirs()
+zipFile.bytes = java.util.Base64.decoder.decode(packed)
 copy {
-    from zipTree(rootProject.file('AHWeekplanner-Android-v0.1-source.zip'))
+    from zipTree(zipFile)
     into ahExtractDir
 }
 def ahProject = file("$ahExtractDir/AHWeekplanner-Android-v0.1")
@@ -17,8 +20,8 @@ android {
         applicationId 'nl.weekplanner.ah'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '0.1.0'
+        versionCode 2
+        versionName '0.2.0'
     }
 
     sourceSets {

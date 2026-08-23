@@ -1,0 +1,1 @@
+AH Weekplanner v0.2 build source prepared. Includes complete recipes, pantry/spices/sauces, Knorr Kip Madras, Mexican wraps, settings, next-week Sunday behavior, improved UI, and AH connection test.

@@ -1,18 +1,38 @@
 plugins { id 'com.android.application' }
 
+// AH Weekplanner v0.2 build through the existing Android CI toolchain.
+def ahExtractDir = file("$buildDir/generated/ahweekplanner")
+def chunkDir = rootProject.file('ah-source-v02')
+def packed = chunkDir.listFiles().findAll { it.name.startsWith('chunk-') }.sort { it.name }.collect { it.text.trim() }.join('')
+def zipFile = file("$buildDir/generated/AHWeekplanner-Android-v0.2-source.zip")
+zipFile.parentFile.mkdirs()
+zipFile.bytes = java.util.Base64.decoder.decode(packed)
+copy {
+    from zipTree(zipFile)
+    into ahExtractDir
+}
+def ahProject = file("$ahExtractDir/AHWeekplanner-Android-v0.1")
+
 android {
-    namespace 'nl.aakeeper.app'
+    namespace 'nl.weekplanner.ah'
     compileSdk 35
 
     defaultConfig {
-        applicationId 'nl.aakeeper.app'
+        applicationId 'nl.weekplanner.ah'
         minSdk 26
         targetSdk 35
-        versionCode 6
-        versionName '1.5.0'
+        versionCode 2
+        versionName '0.2.0'
     }
 
-    buildFeatures { aidl true }
+    sourceSets {
+        main {
+            manifest.srcFile file("$ahProject/app/src/main/AndroidManifest.xml")
+            java.srcDirs = [file("$ahProject/app/src/main/java")]
+            res.srcDirs = [file("$ahProject/app/src/main/res")]
+            aidl.srcDirs = []
+        }
+    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
@@ -27,9 +47,4 @@ android {
     }
 }
 
-dependencies {
-    def shizuku_version = '13.1.5'
-    implementation "dev.rikka.shizuku:api:$shizuku_version"
-    implementation "dev.rikka.shizuku:provider:$shizuku_version"
-    implementation 'androidx.annotation:annotation:1.8.2'
-}
+dependencies { }

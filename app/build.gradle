@@ -1,6 +1,6 @@
 plugins { id 'com.android.application' }
 
-// MT Food v0.9: authenticated AH product search + correct webshopId mapping; keep dual write routes.
+// MT Food v1.0: working AH integration + only selected groceries are sent.
 def ahExtractDir = file("$buildDir/generated/ahweekplanner")
 def chunkDir = rootProject.file('ah-source-v02')
 def packed = chunkDir.listFiles().findAll { it.name.startsWith('chunk-') }.sort { it.name }.collect { it.text.trim() }.join('')
@@ -28,9 +28,68 @@ copy {
     from rootProject.file('patches/v03/ic_mt_food.xml')
     into iconDir
 }
+
 def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
-def mainText = mainActivity.getText('UTF-8').replace('hero.addView(text("Weekplanner", 27, true, Color.WHITE));', 'hero.addView(text("MT Food", 27, true, Color.WHITE));')
-mainText = mainText.replace('Koppeling en veilige praktijktest', 'Koppeling en veilige praktijktest • v0.9')
+def mainText = mainActivity.getText('UTF-8')
+mainText = mainText.replace('hero.addView(text("Weekplanner",27,true,Color.WHITE));', 'hero.addView(text("MT Food",27,true,Color.WHITE));')
+mainText = mainText.replace('buildShell("Koppeling en veilige praktijktest", 2);', 'buildShell("Koppeling en veilige praktijktest • v1.0", 2);')
+
+// Add explicit select-all / clear-all controls above the grocery checkboxes.
+mainText = mainText.replace('''        for(Map.Entry<String,String> e:all.entrySet()){
+            CheckBox cb=new CheckBox(this);''', '''        LinearLayout selectBar=new LinearLayout(this);
+        selectBar.setOrientation(LinearLayout.HORIZONTAL);
+        Button selectAll=secondary("Alles selecteren");
+        Button clearAll=secondary("Alles wissen");
+        selectBar.addView(selectAll,new LinearLayout.LayoutParams(0,-2,1));
+        selectBar.addView(clearAll,new LinearLayout.LayoutParams(0,-2,1));
+        content.addView(selectBar);
+
+        for(Map.Entry<String,String> e:all.entrySet()){
+            CheckBox cb=new CheckBox(this);''')
+
+// Replace the old all.keySet() send behaviour with checked-only selection and confirmation.
+mainText = mainText.replace('''        Button ahBtn=primary(ah.isConnected()?"🛒  Zet producten in mijn AH-lijst":"🔗  Koppel eerst Albert Heijn");
+        ahBtn.setOnClickListener(v->{if(!ah.isConnected())showAh();else matchAndAdd(new ArrayList<>(all.keySet()));});
+        content.addView(ahBtn);''', '''        selectAll.setOnClickListener(v->{
+            for(int i=0;i<content.getChildCount();i++){
+                View child=content.getChildAt(i);
+                if(child instanceof CheckBox) ((CheckBox)child).setChecked(true);
+            }
+        });
+        clearAll.setOnClickListener(v->{
+            for(int i=0;i<content.getChildCount();i++){
+                View child=content.getChildAt(i);
+                if(child instanceof CheckBox) ((CheckBox)child).setChecked(false);
+            }
+        });
+
+        Button ahBtn=primary(ah.isConnected()?"🛒  Zet geselecteerde producten in mijn AH-lijst":"🔗  Koppel eerst Albert Heijn");
+        ahBtn.setOnClickListener(v->{
+            if(!ah.isConnected()){ showAh(); return; }
+            ArrayList<String> selected=new ArrayList<>();
+            for(int i=0;i<content.getChildCount();i++){
+                View child=content.getChildAt(i);
+                if(child instanceof CheckBox && ((CheckBox)child).isChecked()){
+                    String label=((CheckBox)child).getText().toString();
+                    int cut=label.indexOf("   ·   ");
+                    selected.add(cut>0?label.substring(0,cut):label);
+                }
+            }
+            if(selected.isEmpty()){
+                Toast.makeText(this,"Selecteer eerst minimaal één artikel.",Toast.LENGTH_SHORT).show();
+                return;
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle("Toevoegen aan Albert Heijn")
+                    .setMessage(selected.size()+" artikel"+(selected.size()==1?"":"en")+" toevoegen aan je AH-lijst?")
+                    .setPositiveButton("Toevoegen",(d,w)->matchAndAdd(new ArrayList<>(selected)))
+                    .setNegativeButton("Annuleren",null)
+                    .show();
+        });
+        content.addView(ahBtn);''')
+
+if(mainText.contains('matchAndAdd(new ArrayList<>(all.keySet()))')) throw new GradleException('v1.0 selection patch failed: old send-all code remains')
+if(!mainText.contains('Zet geselecteerde producten in mijn AH-lijst') || !mainText.contains('Alles selecteren') || !mainText.contains('Alles wissen')) throw new GradleException('v1.0 selection patch validation failed')
 mainActivity.write(mainText, 'UTF-8')
 
 android {
@@ -41,8 +100,8 @@ android {
         applicationId 'nl.weekplanner.ah'
         minSdk 26
         targetSdk 35
-        versionCode 9
-        versionName '0.9.0'
+        versionCode 10
+        versionName '1.0.0'
     }
 
     sourceSets {

@@ -1,6 +1,6 @@
 plugins { id 'com.android.application' }
 
-// MT Food v1.1: configurable household, 14-day attendance, diet profile, breakfast/lunch in week view.
+// MT Food v1.2: configurable household + scored, constraint-based recipe engine.
 def ahExtractDir = file("$buildDir/generated/ahweekplanner")
 def chunkDir = rootProject.file('ah-source-v02')
 def packed = chunkDir.listFiles().findAll { it.name.startsWith('chunk-') }.sort { it.name }.collect { it.text.trim() }.join('')
@@ -13,18 +13,34 @@ copy {
 }
 def ahProject = file("$ahExtractDir/AHWeekplanner-Android-v0.1")
 
-// Keep the working AH integration.
+// Working AH integration.
 copy {
     from rootProject.file('patches/v08/AhClient.java')
     into file("$ahProject/app/src/main/java/nl/weekplanner/ah")
 }
 
-// Replace UI and add configurable household model.
+// Configurable household/UI from v1.1.
 copy {
     from rootProject.file('patches/v11/MainActivity.java')
     from rootProject.file('patches/v11/HouseholdManager.java')
     into file("$ahProject/app/src/main/java/nl/weekplanner/ah")
 }
+
+// Replace the old fixed planner with the v1.2 scoring/constraint engine.
+copy {
+    from rootProject.file('patches/v12/PlannerEngine.java')
+    into file("$ahProject/app/src/main/java/nl/weekplanner/ah")
+}
+
+// Wire household flags, diet style and favourites into the new recipe engine.
+def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+def mainText = mainActivity.getText('UTF-8')
+mainText = mainText.replace('private final Set<String> pantry = new LinkedHashSet<>();', 'private final Set<String> pantry = new LinkedHashSet<>();\n    private int menuVariant = 0;')
+mainText = mainText.replace('return planner.makeWeek(currentMonday,banned,max);', 'return planner.makeWeek(currentMonday,banned,max,diet,household.nutritionFlags(),prefs.getString("favorites",""),menuVariant++);')
+mainText = mainText.replace('Koppeling en veilige praktijktest • v1.1', 'Koppeling en veilige praktijktest • v1.2')
+mainText = mainText.replace('Jullie complete eetweek • ontbijt, lunch en avondeten', 'Jullie complete eetweek • slim afgestemd op profielen')
+if(!mainText.contains('household.nutritionFlags()') || !mainText.contains('menuVariant++')) throw new GradleException('v1.2 recipe-engine wiring failed')
+mainActivity.write(mainText,'UTF-8')
 
 // MT Food branding.
 copy {
@@ -46,8 +62,8 @@ android {
         applicationId 'nl.weekplanner.ah'
         minSdk 26
         targetSdk 35
-        versionCode 11
-        versionName '1.1.0'
+        versionCode 12
+        versionName '1.2.0'
     }
 
     sourceSets {

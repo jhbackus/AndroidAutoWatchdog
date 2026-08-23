@@ -1,0 +1,40 @@
+name: Build AH Weekplanner APK
+
+on:
+  push:
+    branches: [ ah-weekplanner-build ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Unpack AH Weekplanner source
+        run: unzip -q AHWeekplanner-Android-v0.1-source.zip
+      - name: Build debug APK
+        working-directory: AHWeekplanner-Android-v0.1
+        run: gradle assembleDebug --stacktrace
+      - name: Verify APK
+        run: |
+          APK=AHWeekplanner-Android-v0.1/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          cp "$APK" AHWeekplanner-v0.1-debug.apk
+          sha256sum AHWeekplanner-v0.1-debug.apk > AHWeekplanner-v0.1-debug.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AHWeekplanner-v0.1-debug
+          path: |
+            AHWeekplanner-v0.1-debug.apk
+            AHWeekplanner-v0.1-debug.sha256

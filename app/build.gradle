@@ -1,6 +1,6 @@
 plugins { id 'com.android.application' }
 
-// MT Food v0.8: fixed AH client with exact v2 PATCH plus GraphQL favorite-list fallback.
+// MT Food v0.9: authenticated AH product search + correct webshopId mapping; keep dual write routes.
 def ahExtractDir = file("$buildDir/generated/ahweekplanner")
 def chunkDir = rootProject.file('ah-source-v02')
 def packed = chunkDir.listFiles().findAll { it.name.startsWith('chunk-') }.sort { it.name }.collect { it.text.trim() }.join('')
@@ -13,13 +13,11 @@ copy {
 }
 def ahProject = file("$ahExtractDir/AHWeekplanner-Android-v0.1")
 
-// Replace the AH client wholesale instead of patching strings at build time.
 copy {
     from rootProject.file('patches/v08/AhClient.java')
     into file("$ahProject/app/src/main/java/nl/weekplanner/ah")
 }
 
-// Keep MT Food branding and launcher icon.
 copy {
     from rootProject.file('patches/v03/AndroidManifest.xml')
     into file("$ahProject/app/src/main")
@@ -32,6 +30,7 @@ copy {
 }
 def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
 def mainText = mainActivity.getText('UTF-8').replace('hero.addView(text("Weekplanner", 27, true, Color.WHITE));', 'hero.addView(text("MT Food", 27, true, Color.WHITE));')
+mainText = mainText.replace('Koppeling en veilige praktijktest', 'Koppeling en veilige praktijktest • v0.9')
 mainActivity.write(mainText, 'UTF-8')
 
 android {
@@ -42,8 +41,8 @@ android {
         applicationId 'nl.weekplanner.ah'
         minSdk 26
         targetSdk 35
-        versionCode 8
-        versionName '0.8.0'
+        versionCode 9
+        versionName '0.9.0'
     }
 
     sourceSets {

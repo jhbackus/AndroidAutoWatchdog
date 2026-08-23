@@ -23,10 +23,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Unpack AH Weekplanner source
+      - name: Restore AH Weekplanner v0.2 source
         run: |
           rm -rf AHWeekplanner-Android-v0.1
-          unzip -q AHWeekplanner-Android-v0.1-source.zip
+          base64 -d AHWeekplanner-Android-v0.2-source.b64 > AHWeekplanner-Android-v0.2-source.zip
+          unzip -q AHWeekplanner-Android-v0.2-source.zip
       - name: Build debug APK
         working-directory: AHWeekplanner-Android-v0.1
         run: gradle assembleDebug --stacktrace
@@ -35,27 +36,27 @@ jobs:
           APK=AHWeekplanner-Android-v0.1/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           unzip -t "$APK" >/dev/null
-          cp "$APK" AHWeekplanner-v0.1-debug.apk
-          sha256sum AHWeekplanner-v0.1-debug.apk > AHWeekplanner-v0.1-debug.sha256
-          rm -rf ah-apk-b64
-          mkdir ah-apk-b64
-          base64 -w0 AHWeekplanner-v0.1-debug.apk > ah-apk-b64/all.b64
-          split -b 1800 -d -a 3 ah-apk-b64/all.b64 ah-apk-b64/chunk-
-          rm ah-apk-b64/all.b64
-          COUNT=$(find ah-apk-b64 -type f -name 'chunk-*' | wc -l)
-          SIZE=$(stat -c%s AHWeekplanner-v0.1-debug.apk)
-          SHA=$(sha256sum AHWeekplanner-v0.1-debug.apk | awk '{print $1}')
-          printf 'count=%s\nsize=%s\nsha256=%s\n' "$COUNT" "$SIZE" "$SHA" > ah-apk-b64/manifest.txt
+          cp "$APK" AHWeekplanner-v0.2-debug.apk
+          sha256sum AHWeekplanner-v0.2-debug.apk > AHWeekplanner-v0.2-debug.sha256
+          rm -rf ah-apk-b64-v02
+          mkdir ah-apk-b64-v02
+          base64 -w0 AHWeekplanner-v0.2-debug.apk > ah-apk-b64-v02/all.b64
+          split -b 1800 -d -a 3 ah-apk-b64-v02/all.b64 ah-apk-b64-v02/chunk-
+          rm ah-apk-b64-v02/all.b64
+          COUNT=$(find ah-apk-b64-v02 -type f -name 'chunk-*' | wc -l)
+          SIZE=$(stat -c%s AHWeekplanner-v0.2-debug.apk)
+          SHA=$(sha256sum AHWeekplanner-v0.2-debug.apk | awk '{print $1}')
+          printf 'count=%s\nsize=%s\nsha256=%s\n' "$COUNT" "$SIZE" "$SHA" > ah-apk-b64-v02/manifest.txt
       - name: Publish APK and retrieval chunks
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -f AHWeekplanner-v0.1-debug.apk AHWeekplanner-v0.1-debug.sha256 ah-apk-b64
-          git commit -m 'CI artifact: AH Weekplanner v0.1 small chunks [skip ci]'
+          git add -f AHWeekplanner-v0.2-debug.apk AHWeekplanner-v0.2-debug.sha256 ah-apk-b64-v02
+          git commit -m 'CI artifact: AH Weekplanner v0.2 [skip ci]'
           git push origin HEAD:ah-weekplanner-build
       - uses: actions/upload-artifact@v4
         with:
-          name: AHWeekplanner-v0.1-debug
+          name: AHWeekplanner-v0.2-debug
           path: |
-            AHWeekplanner-v0.1-debug.apk
-            AHWeekplanner-v0.1-debug.sha256
+            AHWeekplanner-v0.2-debug.apk
+            AHWeekplanner-v0.2-debug.sha256

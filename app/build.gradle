@@ -22,15 +22,17 @@ ahText = ahText.replace('public String testConnection()throws Exception{JSONObje
 ahText = ahText.replace('c.setRequestProperty("User-Agent","Appie/8.63 Android");c.setRequestProperty("X-Application","AHWEBSHOP");', 'c.setRequestProperty("User-Agent","Appie/9.28 (iPhone17,3; iPhone; CPU OS 26_1 like Mac OS X)");c.setRequestProperty("x-client-name","appie-ios");c.setRequestProperty("x-client-version","9.28");c.setRequestProperty("x-application","AHWEBSHOP");')
 ahClient.write(ahText, 'UTF-8')
 
-// Branding: installed name MT Food + generated launcher icon + title inside the app.
+// Branding: installed name MT Food + launcher icon + title inside the app.
 copy {
     from rootProject.file('patches/v03/AndroidManifest.xml')
     into file("$ahProject/app/src/main")
 }
-def iconDir = file("$ahProject/app/src/main/res/drawable-nodpi")
+def iconDir = file("$ahProject/app/src/main/res/drawable")
 iconDir.mkdirs()
-def iconB64 = rootProject.file('patches/v03/ic_mt_food.jpg.b64').text.replaceAll('\\s','')
-file("$iconDir/ic_mt_food.jpg").bytes = java.util.Base64.decoder.decode(iconB64)
+copy {
+    from rootProject.file('patches/v03/ic_mt_food.xml')
+    into iconDir
+}
 def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
 def mainText = mainActivity.getText('UTF-8').replace('hero.addView(text("Weekplanner", 27, true, Color.WHITE));', 'hero.addView(text("MT Food", 27, true, Color.WHITE));')
 mainActivity.write(mainText, 'UTF-8')

@@ -3,6 +3,8 @@ name: Build AH Weekplanner APK
 on:
   push:
     branches: [ ah-weekplanner-build ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: read

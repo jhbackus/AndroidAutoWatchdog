@@ -2,7 +2,8 @@ plugins { id 'com.android.application' }
 
 // AH Weekplanner v0.2 build through the existing Android CI toolchain.
 def ahExtractDir = file("$buildDir/generated/ahweekplanner")
-def packed = rootProject.file('AHWeekplanner-Android-v0.2-source.b64').text.replaceAll('\\s','')
+def chunkDir = rootProject.file('ah-source-v02')
+def packed = chunkDir.listFiles().findAll { it.name.startsWith('chunk-') }.sort { it.name }.collect { it.text.trim() }.join('')
 def zipFile = file("$buildDir/generated/AHWeekplanner-Android-v0.2-source.zip")
 zipFile.parentFile.mkdirs()
 zipFile.bytes = java.util.Base64.decoder.decode(packed)

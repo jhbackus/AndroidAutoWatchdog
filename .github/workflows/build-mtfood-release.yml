@@ -35,6 +35,7 @@ jobs:
           s=s.replace('// MT Food v1.5:', '// MT Food v1.7:')
           # Deliberately do not apply patches/v16/crisp.gradle. Crisp is disabled until
           # an official integration can actually add products to the Crisp cart.
+          s += '\napply from: rootProject.file("patches/v17/duck.gradle")\n'
           p.write_text(s)
 
       - name: Build unsigned release APK

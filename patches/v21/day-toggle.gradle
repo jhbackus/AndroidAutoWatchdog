@@ -1,0 +1,56 @@
+// MT Food v2.1: allow excluding an evening meal per date from planning/groceries.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!mainActivity.exists()) throw new GradleException('v2.1: generated MainActivity not found')
+
+def s = mainActivity.getText('UTF-8')
+
+// Dinner enabled state in each day card.
+s = s.replace('''        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);
+        String breakfast=breakfastForDate(m.date);''', '''        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);
+        boolean dinnerEnabled=isDinnerEnabled(m.date);
+        String breakfast=breakfastForDate(m.date);''')
+
+s = s.replace('''        c.addView(mealLine("🥣","Ontbijt",breakfastCount,breakfast));
+        c.addView(mealLine("🥪","Lunch",lunchCount,lunch));
+
+        LinearLayout dinner = new LinearLayout(this);''', '''        c.addView(mealLine("🥣","Ontbijt",breakfastCount,breakfast));
+        c.addView(mealLine("🥪","Lunch",lunchCount,lunch));
+
+        CheckBox dinnerToggle=new CheckBox(this);
+        dinnerToggle.setText(dinnerEnabled?"Avondeten thuis":"Avondeten overslaan / uit eten");
+        dinnerToggle.setTextColor(dinnerEnabled?GREEN:MUTED);
+        dinnerToggle.setChecked(dinnerEnabled);
+        dinnerToggle.setPadding(dp(42),dp(5),0,dp(2));
+        dinnerToggle.setOnCheckedChangeListener((buttonView,checked)->{
+            setDinnerEnabled(m.date,checked);
+            showWeek();
+        });
+        c.addView(dinnerToggle);
+
+        LinearLayout dinner = new LinearLayout(this);''')
+
+s = s.replace('''        labels.addView(text("Avondeten" + (dinnerCount>0 ? "  •  "+dinnerCount+" personen" : "  •  niet nodig"), 12, true, ORANGE));
+        labels.addView(text(m.title, 17, true, INK));
+        labels.addView(text(m.category + "  •  " + m.minutes + " min", 12, false, MUTED));''', '''        labels.addView(text("Avondeten" + (!dinnerEnabled ? "  •  overgeslagen" : (dinnerCount>0 ? "  •  "+dinnerCount+" personen" : "  •  niet nodig")), 12, true, dinnerEnabled?ORANGE:MUTED));
+        labels.addView(text(dinnerEnabled?m.title:"Geen avondeten gepland", 17, true, dinnerEnabled?INK:MUTED));
+        labels.addView(text(dinnerEnabled?(m.category + "  •  " + m.minutes + " min"):"Uit eten / andere planning", 12, false, MUTED));
+        dinner.setAlpha(dinnerEnabled?1f:0.45f);''')
+
+// Only open recipe when the dinner is active.
+s = s.replace('''        c.setOnClickListener(v->showRecipe(m));''', '''        c.setOnClickListener(v->{if(isDinnerEnabled(m.date)) showRecipe(m);});''')
+
+// Exclude skipped dinners from grocery aggregation.
+s = s.replace('''            if(household.count(m.date,HouseholdManager.DINNER)<=0) continue;''', '''            if(household.count(m.date,HouseholdManager.DINNER)<=0 || !isDinnerEnabled(m.date)) continue;''')
+
+// Add persistent per-date helpers.
+s = s.replace('''    private void showRecipe(PlannerEngine.Meal m) {''', '''    private String dinnerEnabledKey(LocalDate date){ return "dinner_enabled_"+date.toString(); }
+    private boolean isDinnerEnabled(LocalDate date){ return prefs.getBoolean(dinnerEnabledKey(date),true); }
+    private void setDinnerEnabled(LocalDate date,boolean enabled){ prefs.edit().putBoolean(dinnerEnabledKey(date),enabled).commit(); }
+
+    private void showRecipe(PlannerEngine.Meal m) {''')
+
+if(!s.contains('dinnerEnabledKey') || !s.contains('Avondeten overslaan / uit eten') || !s.contains('!isDinnerEnabled(m.date)')) {
+    throw new GradleException('v2.1 day toggle wiring failed')
+}
+mainActivity.write(s,'UTF-8')

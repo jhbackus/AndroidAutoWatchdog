@@ -67,8 +67,11 @@ mainText = mainText.replace('private final Set<String> pantry = new LinkedHashSe
         'private final Set<String> pantry = new LinkedHashSet<>();\n    private int menuVariant = 0;')
 mainText = mainText.replace('household = new HouseholdManager(prefs);',
         'household = new HouseholdManager(prefs);\n        initV15Defaults();')
-mainText = mainText.replace('String breakfast=prefs.getString("breakfast","yoghurt / kwark, havermout, blauwe bessen");',
-        'String breakfast=breakfastForDate(m.date);')
+// Only replace the breakfast line inside mealCard; do not touch showGroceries.
+mainText = mainText.replace('''        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);
+        String breakfast=prefs.getString("breakfast","yoghurt / kwark, havermout, blauwe bessen");''',
+'''        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);
+        String breakfast=breakfastForDate(m.date);''')
 mainText = mainText.replace('''        if(breakfastPortions>0){
             String breakfast=prefs.getString("breakfast","yoghurt / kwark, havermout, blauwe bessen");
             for(String x:breakfast.split(",")) if(!x.trim().isEmpty()) all.putIfAbsent(x.trim(),"voor "+breakfastPortions+" ontbijt-porties");

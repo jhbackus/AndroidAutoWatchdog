@@ -1,6 +1,6 @@
 plugins { id 'com.android.application' }
 
-// MT Food v1.3: scored recipe engine + oven/steam-oven support.
+// MT Food v1.4: scored recipe engine + oven/steam-oven support + reliable autosave for settings.
 def ahExtractDir = file("$buildDir/generated/ahweekplanner")
 def chunkDir = rootProject.file('ah-source-v02')
 def packed = chunkDir.listFiles().findAll { it.name.startsWith('chunk-') }.sort { it.name }.collect { it.text.trim() }.join('')
@@ -27,7 +27,7 @@ copy {
     into file("$ahProject/app/src/main/java/nl/weekplanner/ah")
 }
 
-// Add oven and steam-oven recipes to the v1.2 recipe bank.
+// Add oven and steam-oven recipes to the scored recipe bank.
 def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
 def plannerText = plannerFile.getText('UTF-8')
 def extraRecipes = '''
@@ -57,20 +57,47 @@ def extraRecipes = '''
                 "Stoom aardappel, venkel en wortel voor.","Voeg de kabeljauw toe wanneer de groente bijna gaar is.","Stoom tot de vis net uit elkaar valt.","Werk af met citroen en peterselie."));
 '''
 plannerText = plannerText.replaceFirst(/(?s)\n    }\n}\s*$/, '\n' + extraRecipes + '    }\n}\n')
-if(!plannerText.contains('steam-salmon') || !plannerText.contains('oven-chicken-tray')) throw new GradleException('v1.3 extra recipes injection failed')
+if(!plannerText.contains('steam-salmon') || !plannerText.contains('oven-chicken-tray')) throw new GradleException('v1.4 extra recipes injection failed')
 plannerFile.write(plannerText,'UTF-8')
 
-// Wire household profile, favourites and steam-oven setting into the engine/UI.
+// Wire household profile, favourites, steam oven and autosave into UI.
 def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
 def mainText = mainActivity.getText('UTF-8')
 mainText = mainText.replace('private final Set<String> pantry = new LinkedHashSet<>();', 'private final Set<String> pantry = new LinkedHashSet<>();\n    private int menuVariant = 0;')
 mainText = mainText.replace('String diet=prefs.getString("diet_style","Gezond & gevarieerd");', 'String diet=prefs.getString("diet_style","Gezond & gevarieerd");\n        boolean hasSteamOven=prefs.getBoolean("steam_oven",false);\n        if(!hasSteamOven) banned.add("stoomoven");')
 mainText = mainText.replace('return planner.makeWeek(currentMonday,banned,max);', 'String favs=prefs.getString("favorites","");\n        if(hasSteamOven) favs=favs+", stoomoven";\n        return planner.makeWeek(currentMonday,banned,max,diet,household.nutritionFlags(),favs,menuVariant++);')
 mainText = mainText.replace('content.addView(section("Planning"));', 'content.addView(section("Apparatuur"));\n        CheckBox steamOven=new CheckBox(this);\n        steamOven.setText("Stoomoven aanwezig");\n        steamOven.setChecked(prefs.getBoolean("steam_oven",false));\n        steamOven.setTextColor(INK);\n        content.addView(steamOven);\n        content.addView(text("Als dit aan staat mogen recepten worden gekozen die de stoom- of combi-stoomfunctie gebruiken.",12,false,MUTED));\n\n        content.addView(section("Planning"));')
-mainText = mainText.replace('.putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins).apply();', '.putBoolean("steam_oven",steamOven.isChecked())\n                    .putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins).apply();')
-mainText = mainText.replace('Koppeling en veilige praktijktest • v1.1', 'Koppeling en veilige praktijktest • v1.3')
+mainText = mainText.replace('.putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins).apply();', '.putBoolean("steam_oven",steamOven.isChecked())\n                    .putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins).commit();')
+
+// Clear autosave explanation near top of Settings.
+mainText = mainText.replace('buildShell("Huishouden, 2-wekenrooster en voedingsprofiel", 3);', 'buildShell("Huishouden, 2-wekenrooster en voedingsprofiel", 3);\n        LinearLayout autoInfo=card(GREEN_LIGHT);\n        autoInfo.addView(text("✓ Wijzigingen worden automatisch opgeslagen",15,true,GREEN));\n        autoInfo.addView(text("Tekstvelden worden opgeslagen zodra je naar een ander veld of scherm gaat. De knop Opslaan blijft als extra zekerheid aanwezig.",12,false,MUTED));\n        content.addView(autoInfo);')
+
+// Autosave the editable comma-separated fields whenever focus leaves the field.
+def autosaveHook = '''
+        breakfast.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("breakfast",normalizeList(breakfast.getText().toString())).commit();}});
+        lunch.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("lunch",normalizeList(lunch.getText().toString())).commit();}});
+        fav.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("favorites",normalizeList(fav.getText().toString())).commit();}});
+        banned.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("banned",normalizeList(banned.getText().toString())).commit();}});
+        stock.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("pantry",normalizeList(stock.getText().toString())).commit();loadPantry();}});
+'''
+mainText = mainText.replace('Button save=primary("Opslaan");', autosaveHook + '\n        Button save=primary("💾  Opslaan");')
+
+// Normalize text lists when the explicit save button is used as well.
+mainText = mainText.replace('prefs.edit().putString("breakfast",breakfast.getText().toString())\n                    .putString("lunch",lunch.getText().toString())\n                    .putString("favorites",fav.getText().toString())\n                    .putString("banned",banned.getText().toString())\n                    .putString("pantry",stock.getText().toString())', 'prefs.edit().putString("breakfast",normalizeList(breakfast.getText().toString()))\n                    .putString("lunch",normalizeList(lunch.getText().toString()))\n                    .putString("favorites",normalizeList(fav.getText().toString()))\n                    .putString("banned",normalizeList(banned.getText().toString()))\n                    .putString("pantry",normalizeList(stock.getText().toString()))')
+mainText = mainText.replace('private void loadPantry(){', '''private String normalizeList(String raw){
+        if(raw==null)return "";
+        ArrayList<String> clean=new ArrayList<>();
+        for(String x:raw.split(",")){
+            String t=x.trim();
+            if(!t.isEmpty())clean.add(t);
+        }
+        return android.text.TextUtils.join(", ",clean);
+    }
+
+    private void loadPantry(){''')
+mainText = mainText.replace('Koppeling en veilige praktijktest • v1.1', 'Koppeling en veilige praktijktest • v1.4')
 mainText = mainText.replace('Jullie complete eetweek • ontbijt, lunch en avondeten', 'Jullie complete eetweek • slim afgestemd op profielen & apparatuur')
-if(!mainText.contains('steam_oven') || !mainText.contains('Stoomoven aanwezig') || !mainText.contains('menuVariant++')) throw new GradleException('v1.3 steam-oven UI wiring failed')
+if(!mainText.contains('normalizeList') || !mainText.contains('setOnFocusChangeListener') || !mainText.contains('Wijzigingen worden automatisch opgeslagen')) throw new GradleException('v1.4 autosave wiring failed')
 mainActivity.write(mainText,'UTF-8')
 
 copy {
@@ -92,8 +119,8 @@ android {
         applicationId 'nl.weekplanner.ah'
         minSdk 26
         targetSdk 35
-        versionCode 13
-        versionName '1.3.0'
+        versionCode 14
+        versionName '1.4.0'
     }
 
     sourceSets {

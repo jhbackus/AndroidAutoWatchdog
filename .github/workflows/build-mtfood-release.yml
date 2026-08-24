@@ -23,16 +23,16 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Prepare MT Food v2.5 without Crisp
+      - name: Prepare MT Food v2.6 without Crisp
         shell: python
         run: |
           from pathlib import Path
           p=Path('app/build.gradle')
           s=p.read_text()
-          s=s.replace('versionCode 15', 'versionCode 25')
-          s=s.replace("versionName '1.5.0'", "versionName '2.5.0'")
-          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v2.5')
-          s=s.replace('// MT Food v1.5:', '// MT Food v2.5:')
+          s=s.replace('versionCode 15', 'versionCode 26')
+          s=s.replace("versionName '1.5.0'", "versionName '2.6.0'")
+          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v2.6')
+          s=s.replace('// MT Food v1.5:', '// MT Food v2.6:')
           # Crisp remains deliberately disabled until an official cart integration exists.
           s += '\napply from: rootProject.file("patches/v17/duck.gradle")\n'
           s += 'apply from: rootProject.file("patches/v18/asian.gradle")\n'
@@ -42,6 +42,8 @@ jobs:
           s += 'apply from: rootProject.file("patches/v24/pencil-style.gradle")\n'
           s += 'apply from: rootProject.file("patches/v25/weekly-variety.gradle")\n'
           s += 'apply from: rootProject.file("patches/v25/weekly-variety-fix.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v26/replacement-history-and-recipes.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v26/multistep-preparation.gradle")\n'
           p.write_text(s)
 
       - name: Build unsigned release APK
@@ -76,7 +78,7 @@ jobs:
       - name: Sign and verify MT Food
         run: |
           UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
-          OUT=MT-Food-v2.5.apk
+          OUT=MT-Food-v2.6.apk
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
           "$APKSIGNER" sign \
             --ks "$RUNNER_TEMP/mtfood-release.p12" \
@@ -93,8 +95,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MT-Food-v2.5-signed
+          name: MT-Food-v2.6-signed
           path: |
-            MT-Food-v2.5.apk
+            MT-Food-v2.6.apk
             MT-Food-release.sha256
             MT-Food-signing-verification.txt

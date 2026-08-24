@@ -1,5 +1,4 @@
-// MT Food v1.6 Crisp integration patch. Applied by the dedicated v1.6 workflow
-// after app/build.gradle has generated and patched the reconstructed Android source.
+// MT Food v1.6 Crisp integration patch. Applied after app/build.gradle has generated the Android source.
 
 def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
 def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
@@ -7,11 +6,9 @@ def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEn
 if(!mainActivity.exists() || !plannerFile.exists()) throw new GradleException('v1.6: generated MT Food sources not found')
 
 def mainText = mainActivity.getText('UTF-8')
-
-// Default Crisp preference list: user can edit/remove these in Settings.
 def crispDefaults = 'granaatappelsap 500ml, krabsalade, hopjesvla, eendenbout gegaard, sukade gegaard, lamsschenkel, kurkumashots, gembershots'
 
-// Add configured Crisp products to this week's list and route them away from AH.
+// Add configured Crisp preference products to the separate Crisp list and never route them to AH.
 mainText = mainText.replace('''        if(prefs.getBoolean("daily_veg_shot",true)){
             all.putIfAbsent("AH 85% Groenteshot spinazie","4 stuks");
             all.putIfAbsent("AH 85% Groenteshot wortel","3 stuks");
@@ -78,10 +75,10 @@ mainText = mainText.replace('''        updateCount.run();
 
     private void showCrispList(List<String> selected){
         StringBuilder sb=new StringBuilder();
-        for(String s:selected) sb.append("• ").append(s).append("\n");
+        for(String s:selected) sb.append("• ").append(s).append("\\n");
         new AlertDialog.Builder(this)
                 .setTitle("Crisp-boodschappen")
-                .setMessage(sb.toString().trim()+"\n\nCrisp biedt geen gedocumenteerde externe consumenten-API voor het rechtstreeks vullen van het mandje. MT Food opent daarom de officiële Crisp-app met deze aparte lijst klaar in MT Food.")
+                .setMessage(sb.toString().trim()+"\\n\\nCrisp heeft geen gedocumenteerde consumenten-API waarmee MT Food betrouwbaar het mandje extern kan vullen. De lijst staat daarom apart klaar en MT Food opent de officiële Crisp-app.")
                 .setPositiveButton("Open Crisp",(d,w)->openCrisp())
                 .setNeutralButton("Kopieer lijst",(d,w)->{
                     android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
@@ -100,12 +97,11 @@ mainText = mainText.replace('''        updateCount.run();
 
     private void showAh()''')
 
-// Settings field for the default Crisp routing list.
 mainText = mainText.replace('''        content.addView(section("Favorieten"));
         EditText fav=input("Favoriete gerechten/producten",prefs.getString("favorites","Knorr Kip Madras, Mexicaanse wraps, Kinder Bueno"));''', '''        content.addView(section("Crisp"));
         EditText crispProducts=input("Crisp-voorkeursproducten (komma's)",prefs.getString("crisp_products","''' + crispDefaults + '''"));
         content.addView(crispProducts);
-        content.addView(text("Deze artikelen worden standaard aan de Crisp-lijst toegevoegd en niet naar AH gestuurd.",12,false,MUTED));
+        content.addView(text("Deze artikelen worden aan de Crisp-lijst toegewezen en nooit naar AH gestuurd.",12,false,MUTED));
         Button openCrispSettings=secondary("Open Crisp-app");
         openCrispSettings.setOnClickListener(v->openCrisp());
         content.addView(openCrispSettings);
@@ -125,7 +121,7 @@ mainText = mainText.replace('Jullie complete eetweek • fruitvariatie, profiele
 if(!mainText.contains('crisp_products') || !mainText.contains('openCrisp()') || !mainText.contains('Crisp-boodschappen')) throw new GradleException('v1.6 Crisp UI wiring failed')
 mainActivity.write(mainText,'UTF-8')
 
-// Add Crisp-specific dinner recipes so unique Crisp ingredients can participate in the planner.
+// Crisp-specific dinner recipes.
 def plannerText = plannerFile.getText('UTF-8')
 def crispRecipes = '''
         recipes.add(new Recipe("crisp-duck","Gegaarde eendenbout met rodekool, appel en aardappelpuree","🦆","AVG",35,"Crisp-eendenbout met klassieke groente en puree.","balanced protein vegetables crisp oven",
@@ -142,6 +138,5 @@ plannerText = plannerText.replaceFirst(/(?s)\n    }\n}\s*$/, '\n' + crispRecipes
 if(!plannerText.contains('crisp-duck') || !plannerText.contains('crisp-sukade') || !plannerText.contains('crisp-lamb')) throw new GradleException('v1.6 Crisp recipes injection failed')
 plannerFile.write(plannerText,'UTF-8')
 
-// Bump app version for this build.
 android.defaultConfig.versionCode = 16
 android.defaultConfig.versionName = '1.6.0'

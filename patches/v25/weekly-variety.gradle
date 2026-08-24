@@ -1,0 +1,150 @@
+// MT Food v2.5: hard weekly variety rules and context-aware single-meal replacement.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!plannerFile.exists() || !mainFile.exists()) throw new GradleException('v2.5: generated sources not found')
+
+def p = plannerFile.getText('UTF-8')
+
+// Track hard weekly counts while a new week is generated.
+p = p.replace('''        Set<String> usedIds=new HashSet<>();
+        Set<String> usedProteins=new HashSet<>();''', '''        Set<String> usedIds=new HashSet<>();
+        Set<String> usedProteins=new HashSet<>();
+        Map<String,Integer> meatCounts=new HashMap<>();
+        int fishCount=0;''')
+
+// Apply hard variety constraints before scoring candidates.
+p = p.replace('''            for(Recipe r:allowed){
+                if(usedIds.contains(r.id)) continue;
+                double s=score(r,target,diet,nutritionFlags,favourites,usedProteins);''', '''            for(Recipe r:allowed){
+                if(usedIds.contains(r.id)) continue;
+                if(isFishRecipe(r) && fishCount>=2) continue;
+                String mk=meatKey(r);
+                if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+                double s=score(r,target,diet,nutritionFlags,favourites,usedProteins);''')
+
+// Keep the same hard rules in fallback selection too.
+p = p.replace('''                for(Recipe r:allowed){
+                    double s=score(r,target,diet,nutritionFlags,favourites,usedProteins)+rnd.nextDouble();''', '''                for(Recipe r:allowed){
+                    if(usedIds.contains(r.id)) continue;
+                    if(isFishRecipe(r) && fishCount>=2) continue;
+                    String mk=meatKey(r);
+                    if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+                    double s=score(r,target,diet,nutritionFlags,favourites,usedProteins)+rnd.nextDouble();''')
+
+// Update counters once a recipe has been selected.
+p = p.replace('''                chosen.add(best);usedIds.add(best.id);
+                String protein=proteinTag(best.tags); if(protein!=null)usedProteins.add(protein);''', '''                chosen.add(best);usedIds.add(best.id);
+                String protein=proteinTag(best.tags); if(protein!=null)usedProteins.add(protein);
+                if(isFishRecipe(best)) fishCount++;
+                String mk=meatKey(best); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);''')
+
+// Insert classification + contextual replacement helpers before proteinTag.
+p = p.replace('''    private static String proteinTag(Set<String>t){''', '''    private static boolean isFishRecipe(Recipe r){
+        return r.tags.contains("fish") || r.tags.contains("salmon") || containsIngredient(r,"zalm") || containsIngredient(r,"kabeljauw") || containsIngredient(r,"vis");
+    }
+
+    // Meat key represents the same practical meat product/cut. This deliberately treats
+    // a gehaktbal separately from loose gehakt used in e.g. lasagne/bolognese.
+    private static String meatKey(Recipe r){
+        String title=r.title.toLowerCase(Locale.ROOT);
+        if(title.contains("gehaktbal")) return "gehaktbal";
+        for(Ingredient i:r.ingredients){
+            String n=i.name.toLowerCase(Locale.ROOT);
+            if(n.contains("kipfilet")) return "kipfilet";
+            if(n.contains("kippendij")) return "kippendij";
+            if(n.contains("kipgehakt")) return "kipgehakt";
+            if(n.contains("rundergehakt") || (n.contains("gehakt") && !n.contains("kip"))) return "gehakt";
+            if(n.contains("biefstuk")) return "biefstuk";
+            if(n.contains("sukade")) return "sukade";
+            if(n.contains("eendenbout")) return "eendenbout";
+            if(n.contains("varkenshaas")) return "varkenshaas";
+            if(n.contains("varkensfilet")) return "varkensfilet";
+            if(n.contains("lams") || n.contains("lamsschenkel")) return "lam";
+        }
+        return null;
+    }
+
+    private static boolean containsIngredient(Recipe r,String needle){
+        for(Ingredient i:r.ingredients) if(i.name.toLowerCase(Locale.ROOT).contains(needle)) return true;
+        return false;
+    }
+
+    private Recipe recipeForMeal(Meal m){
+        if(m==null) return null;
+        for(Recipe r:recipes) if(r.title.equals(m.title)) return r;
+        return null;
+    }
+
+    public Meal replaceMeal(LocalDate date, Meal oldMeal, List<Meal> activeOtherMeals,
+                            Set<String> banned, int maxMinutes, String diet,
+                            Set<String> nutritionFlags, String favourites, int variant){
+        List<Recipe> allowedRecipes=new ArrayList<>();
+        for(Recipe r:recipes) if(allowed(r,banned,maxMinutes,diet)) allowedRecipes.add(r);
+        if(allowedRecipes.isEmpty()) return oldMeal;
+
+        int fishCount=0;
+        Map<String,Integer> meatCounts=new HashMap<>();
+        Set<String> usedTitles=new HashSet<>();
+        Set<String> usedProteins=new HashSet<>();
+        if(activeOtherMeals!=null){
+            for(Meal m:activeOtherMeals){
+                if(m==null || (oldMeal!=null && m.date.equals(oldMeal.date))) continue;
+                usedTitles.add(m.title);
+                Recipe rr=recipeForMeal(m);
+                if(rr==null) continue;
+                if(isFishRecipe(rr)) fishCount++;
+                String mk=meatKey(rr); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);
+                String pt=proteinTag(rr.tags); if(pt!=null) usedProteins.add(pt);
+            }
+        }
+
+        Random rnd=new Random(Objects.hash(date.toString(),diet,variant,System.nanoTime()));
+        String target=oldMeal==null?"Anders":oldMeal.category;
+        Recipe best=null; double bestScore=-1e9;
+        for(Recipe r:allowedRecipes){
+            if(oldMeal!=null && r.title.equals(oldMeal.title)) continue;
+            if(usedTitles.contains(r.title)) continue;
+            if(isFishRecipe(r) && fishCount>=2) continue;
+            String mk=meatKey(r);
+            if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+            double sc=score(r,target,diet,nutritionFlags,favourites,usedProteins)+rnd.nextDouble()*2.5;
+            if(sc>bestScore){ bestScore=sc; best=r; }
+        }
+        return best==null?oldMeal:new Meal(date,best);
+    }
+
+    private static String proteinTag(Set<String>t){''')
+
+if(!p.contains('public Meal replaceMeal') || !p.contains('fishCount>=2') || !p.contains('meatKey(Recipe r)')) {
+    throw new GradleException('v2.5 planner variety patch failed')
+}
+plannerFile.write(p,'UTF-8')
+
+def m = mainFile.getText('UTF-8')
+
+// Replace only the selected dinner and evaluate all other ACTIVE dinners in this week.
+m = m.replace('''        Button replace=secondary("↻  Vervang dit gerecht");
+        replace.setOnClickListener(v->{currentWeek=generateWeek();showWeek();});''', '''        Button replace=secondary("↻  Vervang dit gerecht");
+        replace.setOnClickListener(v->{
+            List<PlannerEngine.Meal> activeMeals=new ArrayList<>();
+            for(PlannerEngine.Meal x:currentWeek){
+                if(!isWholeDaySkipped(x.date) && isMealEnabled(x.date,"dinner")) activeMeals.add(x);
+            }
+            int maxMin=prefs.getInt("max_minutes",45);
+            Set<String> banned=new LinkedHashSet<>();
+            String bannedRaw=prefs.getString("banned","");
+            for(String x:bannedRaw.split(",")) if(!x.trim().isEmpty()) banned.add(x.trim());
+            PlannerEngine.Meal replacement=planner.replaceMeal(
+                    m.date,m,activeMeals,banned,maxMin,
+                    prefs.getString("diet_style","Gezond & gevarieerd"),
+                    household.nutritionFlags(),prefs.getString("favourites",""),
+                    prefs.getInt("menu_variant",0)+1);
+            for(int i=0;i<currentWeek.size();i++) if(currentWeek.get(i).date.equals(m.date)){ currentWeek.set(i,replacement); break; }
+            showWeek();
+        });''')
+
+if(!m.contains('planner.replaceMeal(') || m.contains('replace.setOnClickListener(v->{currentWeek=generateWeek();showWeek();});')) {
+    throw new GradleException('v2.5 replacement wiring failed')
+}
+mainFile.write(m,'UTF-8')

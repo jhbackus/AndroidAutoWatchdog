@@ -1,0 +1,25 @@
+// MT Food v2.0: default planning/shopping week is always next calendar week.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!mainActivity.exists()) throw new GradleException('v2.0: generated MainActivity not found')
+
+def mainText = mainActivity.getText('UTF-8')
+def oldCode = '''    private void selectDefaultWeek() {
+        LocalDate today = LocalDate.now();
+        LocalDate monday = today.minusDays(today.getDayOfWeek().getValue()-1);
+        if (today.getDayOfWeek() == DayOfWeek.SUNDAY && prefs.getBoolean("sunday_next", true)) monday = monday.plusWeeks(1);
+        currentMonday = monday;
+        currentWeek = generateWeek();
+    }'''
+def newCode = '''    private void selectDefaultWeek() {
+        LocalDate today = LocalDate.now();
+        LocalDate thisMonday = today.minusDays(today.getDayOfWeek().getValue()-1);
+        // MT Food is a planning/shopping app: during the current week we prepare the next week.
+        currentMonday = thisMonday.plusWeeks(1);
+        currentWeek = generateWeek();
+    }'''
+if(!mainText.contains(oldCode)) throw new GradleException('v2.0: selectDefaultWeek marker not found')
+mainText = mainText.replace(oldCode,newCode)
+mainText = mainText.replace('Jullie complete eetweek • fruitvariatie, profielen & apparatuur', 'Volgende eetweek • boodschappen vooraf plannen')
+mainText = mainText.replace('Jullie complete eetweek • ontbijt, lunch en avondeten', 'Volgende eetweek • boodschappen vooraf plannen')
+mainActivity.write(mainText,'UTF-8')

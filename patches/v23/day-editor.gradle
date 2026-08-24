@@ -1,0 +1,122 @@
+// MT Food v2.3: per-day pencil editor for breakfast/lunch/dinner/full-day absence.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!mainActivity.exists()) throw new GradleException('v2.3: generated MainActivity not found')
+
+def s = mainActivity.getText('UTF-8')
+
+// Replace the simple date heading with a heading row and pencil editor button.
+s = s.replace('''        c.addView(text(m.day + "  •  " + m.date.format(DateTimeFormatter.ofPattern("d MMM")), 14, true, GREEN));
+
+        int breakfastCount=household.count(m.date,HouseholdManager.BREAKFAST);
+        int lunchCount=household.count(m.date,HouseholdManager.LUNCH);
+        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);''', '''        LinearLayout dayHead=new LinearLayout(this);
+        dayHead.setOrientation(LinearLayout.HORIZONTAL);
+        dayHead.setGravity(Gravity.CENTER_VERTICAL);
+        dayHead.addView(text(m.day + "  •  " + m.date.format(DateTimeFormatter.ofPattern("d MMM")), 14, true, GREEN),new LinearLayout.LayoutParams(0,-2,1));
+        Button editDay=miniButton("✎");
+        editDay.setContentDescription("Dag bewerken");
+        editDay.setOnClickListener(v->showDayEditor(m.date));
+        dayHead.addView(editDay,new LinearLayout.LayoutParams(dp(52),-2));
+        c.addView(dayHead);
+
+        boolean skipDay=isWholeDaySkipped(m.date);
+        if(skipDay){
+            TextView skipped=text("Afwezig • hele dag overgeslagen",15,true,MUTED);
+            skipped.setPadding(0,dp(16),0,dp(12));
+            c.addView(skipped);
+            c.setAlpha(0.62f);
+            return c;
+        }
+
+        int breakfastCount=isMealEnabled(m.date,"breakfast")?household.count(m.date,HouseholdManager.BREAKFAST):0;
+        int lunchCount=isMealEnabled(m.date,"lunch")?household.count(m.date,HouseholdManager.LUNCH):0;
+        int dinnerCount=isMealEnabled(m.date,"dinner")?household.count(m.date,HouseholdManager.DINNER):0;''')
+
+// Only open dinner recipe if that meal is enabled.
+s = s.replace('''        c.setOnClickListener(v->showRecipe(m));''', '''        c.setOnClickListener(v->{if(!isWholeDaySkipped(m.date) && isMealEnabled(m.date,"dinner")) showRecipe(m);});''')
+
+// Dinner groceries: only include if day and dinner are active.
+s = s.replace('''            if(household.count(m.date,HouseholdManager.DINNER)<=0) continue;''', '''            if(isWholeDaySkipped(m.date) || !isMealEnabled(m.date,"dinner") || household.count(m.date,HouseholdManager.DINNER)<=0) continue;''')
+
+// Replace aggregate breakfast/lunch counts with date-aware meal selections.
+s = s.replace('''        int breakfastPortions=household.totalMealPortions(currentMonday,HouseholdManager.BREAKFAST);
+        int lunchPortions=household.totalMealPortions(currentMonday,HouseholdManager.LUNCH);''', '''        int breakfastPortions=0;
+        int lunchPortions=0;
+        for(int d=0;d<7;d++){
+            LocalDate date=currentMonday.plusDays(d);
+            if(isWholeDaySkipped(date)) continue;
+            if(isMealEnabled(date,"breakfast")) breakfastPortions+=household.count(date,HouseholdManager.BREAKFAST);
+            if(isMealEnabled(date,"lunch")) lunchPortions+=household.count(date,HouseholdManager.LUNCH);
+        }''')
+
+// Make breakfast fruit groceries respect full-day and breakfast selection.
+s = s.replace('''            int n=household.count(date,HouseholdManager.BREAKFAST);
+            if(n<=0) continue;''', '''            if(isWholeDaySkipped(date) || !isMealEnabled(date,"breakfast")) continue;
+            int n=household.count(date,HouseholdManager.BREAKFAST);
+            if(n<=0) continue;''')
+
+// Add editor and persistent helpers before showRecipe.
+s = s.replace('''    private void showRecipe(PlannerEngine.Meal m) {''', '''    private String mealEnabledKey(LocalDate date,String meal){ return "meal_enabled_"+meal+"_"+date.toString(); }
+    private boolean isMealEnabled(LocalDate date,String meal){ return prefs.getBoolean(mealEnabledKey(date,meal),true); }
+    private String wholeDaySkipKey(LocalDate date){ return "whole_day_skip_"+date.toString(); }
+    private boolean isWholeDaySkipped(LocalDate date){ return prefs.getBoolean(wholeDaySkipKey(date),false); }
+
+    private void showDayEditor(LocalDate date){
+        LinearLayout box=new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20),dp(8),dp(20),dp(8));
+
+        CheckBox breakfastCb=new CheckBox(this);
+        breakfastCb.setText("Ontbijt");
+        breakfastCb.setChecked(isMealEnabled(date,"breakfast"));
+        box.addView(breakfastCb);
+
+        CheckBox lunchCb=new CheckBox(this);
+        lunchCb.setText("Lunch");
+        lunchCb.setChecked(isMealEnabled(date,"lunch"));
+        box.addView(lunchCb);
+
+        CheckBox dinnerCb=new CheckBox(this);
+        dinnerCb.setText("Avondeten");
+        dinnerCb.setChecked(isMealEnabled(date,"dinner"));
+        box.addView(dinnerCb);
+
+        Space gap=new Space(this);
+        box.addView(gap,new LinearLayout.LayoutParams(1,dp(18)));
+
+        CheckBox skipCb=new CheckBox(this);
+        skipCb.setText("Hele dag overslaan? (afwezig)");
+        skipCb.setChecked(isWholeDaySkipped(date));
+        box.addView(skipCb);
+
+        Runnable updateEnabled=()->{
+            boolean enabled=!skipCb.isChecked();
+            breakfastCb.setEnabled(enabled); lunchCb.setEnabled(enabled); dinnerCb.setEnabled(enabled);
+            breakfastCb.setAlpha(enabled?1f:0.45f); lunchCb.setAlpha(enabled?1f:0.45f); dinnerCb.setAlpha(enabled?1f:0.45f);
+        };
+        skipCb.setOnCheckedChangeListener((b,checked)->updateEnabled.run());
+        updateEnabled.run();
+
+        new AlertDialog.Builder(this)
+                .setTitle("Dag bewerken • "+date.format(DateTimeFormatter.ofPattern("EEE d MMM")))
+                .setView(box)
+                .setPositiveButton("Opslaan",(d,w)->{
+                    prefs.edit()
+                            .putBoolean(mealEnabledKey(date,"breakfast"),breakfastCb.isChecked())
+                            .putBoolean(mealEnabledKey(date,"lunch"),lunchCb.isChecked())
+                            .putBoolean(mealEnabledKey(date,"dinner"),dinnerCb.isChecked())
+                            .putBoolean(wholeDaySkipKey(date),skipCb.isChecked())
+                            .commit();
+                    showWeek();
+                })
+                .setNegativeButton("Annuleren",null)
+                .show();
+    }
+
+    private void showRecipe(PlannerEngine.Meal m) {''')
+
+if(!s.contains('showDayEditor') || !s.contains('Hele dag overslaan? (afwezig)') || !s.contains('meal_enabled_breakfast') && !s.contains('mealEnabledKey')) {
+    throw new GradleException('v2.3 day editor wiring failed')
+}
+mainActivity.write(s,'UTF-8')

@@ -19,7 +19,10 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
@@ -35,6 +38,7 @@ public class AhClient {
     private static final String CLIENT_VERSION = "9.28";
     private static final String USER_AGENT = "Appie/9.28 (iPhone17,3; iPhone; CPU OS 26_1 like Mac OS X)";
     private final SharedPreferences prefs;
+    private int lastSkippedDuplicates = 0;
 
     public AhClient(Context context) {
         prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -53,6 +57,10 @@ public class AhClient {
 
     public void disconnect() {
         prefs.edit().clear().apply();
+    }
+
+    public int getLastSkippedDuplicates() {
+        return lastSkippedDuplicates;
     }
 
     public void exchangeCode(String code) throws Exception {
@@ -137,23 +145,66 @@ public class AhClient {
     }
 
     public void addProductsToShoppingList(List<AhLine> lines) throws Exception {
-        String patchError = null;
-        try {
-            addViaShoppingListV2(lines);
-            return;
-        } catch (Exception e) {
-            patchError = compact(e.getMessage());
-        }
+        lastSkippedDuplicates = 0;
 
-        String graphqlError = null;
-        try {
-            addViaFavoriteListGraphQL(lines);
-            return;
-        } catch (Exception e) {
-            graphqlError = compact(e.getMessage());
+        // First deduplicate the outgoing batch by AH webshop/product id. Different
+        // grocery names can resolve to the same first AH search result.
+        LinkedHashMap<Integer, AhLine> unique = new LinkedHashMap<>();
+        for (AhLine line : lines) {
+            AhLine existing = unique.get(line.productId);
+            if (existing == null) {
+                unique.put(line.productId, line);
+            } else {
+                lastSkippedDuplicates++;
+                unique.put(line.productId, new AhLine(line.productId, Math.max(existing.quantity, line.quantity)));
+            }
         }
+        List<AhLine> clean = new ArrayList<>(unique.values());
+        if (clean.isEmpty()) return;
 
-        throw new RuntimeException("AH-write diagnose\nPATCH v2: " + patchError + "\nGraphQL: " + graphqlError);
+        try {
+            addViaShoppingListV2(clean);
+            return;
+        } catch (Exception batchError) {
+            String msg = compact(batchError.getMessage());
+            if (isDuplicateError(msg)) {
+                // AH rejects an entire batch when even one item is already present.
+                // Retry one by one and silently skip only the duplicates.
+                Exception firstRealError = null;
+                int added = 0;
+                for (AhLine line : clean) {
+                    try {
+                        addViaShoppingListV2(Collections.singletonList(line));
+                        added++;
+                    } catch (Exception oneError) {
+                        String oneMsg = compact(oneError.getMessage());
+                        if (isDuplicateError(oneMsg)) {
+                            lastSkippedDuplicates++;
+                        } else if (firstRealError == null) {
+                            firstRealError = oneError;
+                        }
+                    }
+                }
+                if (added > 0 || firstRealError == null) return;
+                throw firstRealError;
+            }
+
+            String patchError = msg;
+            String graphqlError = null;
+            try {
+                addViaFavoriteListGraphQL(clean);
+                return;
+            } catch (Exception e) {
+                graphqlError = compact(e.getMessage());
+            }
+            throw new RuntimeException("AH-write diagnose\nPATCH v2: " + patchError + "\nGraphQL: " + graphqlError);
+        }
+    }
+
+    private boolean isDuplicateError(String message) {
+        if (message == null) return false;
+        String m = message.toLowerCase();
+        return m.contains("409") || m.contains("cannot be duplicate") || m.contains("duplicate");
     }
 
     private void addViaShoppingListV2(List<AhLine> lines) throws Exception {

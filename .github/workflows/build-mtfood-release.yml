@@ -23,11 +23,19 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Apply current MT Food feature patch
+      - name: Prepare MT Food v1.7 without Crisp
+        shell: python
         run: |
-          if [ -f patches/v16/crisp.gradle ]; then
-            printf '\napply from: rootProject.file("patches/v16/crisp.gradle")\n' >> app/build.gradle
-          fi
+          from pathlib import Path
+          p=Path('app/build.gradle')
+          s=p.read_text()
+          s=s.replace('versionCode 15', 'versionCode 17')
+          s=s.replace("versionName '1.5.0'", "versionName '1.7.0'")
+          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v1.7')
+          s=s.replace('// MT Food v1.5:', '// MT Food v1.7:')
+          # Deliberately do not apply patches/v16/crisp.gradle. Crisp is disabled until
+          # an official integration can actually add products to the Crisp cart.
+          p.write_text(s)
 
       - name: Build unsigned release APK
         run: gradle assembleRelease --stacktrace
@@ -61,7 +69,7 @@ jobs:
       - name: Sign and verify MT Food
         run: |
           UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
-          OUT=MT-Food-release.apk
+          OUT=MT-Food-v1.7-no-Crisp.apk
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
           "$APKSIGNER" sign \
             --ks "$RUNNER_TEMP/mtfood-release.p12" \
@@ -78,8 +86,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MT-Food-signed-release
+          name: MT-Food-v1.7-no-Crisp-signed
           path: |
-            MT-Food-release.apk
+            MT-Food-v1.7-no-Crisp.apk
             MT-Food-release.sha256
             MT-Food-signing-verification.txt

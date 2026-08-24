@@ -1,6 +1,6 @@
 plugins { id 'com.android.application' }
 
-// MT Food v1.4: scored recipe engine + oven/steam-oven support + reliable autosave for settings.
+// MT Food v1.5: all v1.4 features + breakfast fruit rotation + daily AH vegetable shots.
 def ahExtractDir = file("$buildDir/generated/ahweekplanner")
 def chunkDir = rootProject.file('ah-source-v02')
 def packed = chunkDir.listFiles().findAll { it.name.startsWith('chunk-') }.sort { it.name }.collect { it.text.trim() }.join('')
@@ -27,7 +27,7 @@ copy {
     into file("$ahProject/app/src/main/java/nl/weekplanner/ah")
 }
 
-// Add oven and steam-oven recipes to the scored recipe bank.
+// Oven and steam-oven recipes retained from v1.3/v1.4.
 def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
 def plannerText = plannerFile.getText('UTF-8')
 def extraRecipes = '''
@@ -57,34 +57,161 @@ def extraRecipes = '''
                 "Stoom aardappel, venkel en wortel voor.","Voeg de kabeljauw toe wanneer de groente bijna gaar is.","Stoom tot de vis net uit elkaar valt.","Werk af met citroen en peterselie."));
 '''
 plannerText = plannerText.replaceFirst(/(?s)\n    }\n}\s*$/, '\n' + extraRecipes + '    }\n}\n')
-if(!plannerText.contains('steam-salmon') || !plannerText.contains('oven-chicken-tray')) throw new GradleException('v1.4 extra recipes injection failed')
+if(!plannerText.contains('steam-salmon') || !plannerText.contains('oven-chicken-tray')) throw new GradleException('v1.5 extra recipes injection failed')
 plannerFile.write(plannerText,'UTF-8')
 
-// Wire household profile, favourites, steam oven and autosave into UI.
+// UI and settings wiring.
 def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
 def mainText = mainActivity.getText('UTF-8')
-mainText = mainText.replace('private final Set<String> pantry = new LinkedHashSet<>();', 'private final Set<String> pantry = new LinkedHashSet<>();\n    private int menuVariant = 0;')
-mainText = mainText.replace('String diet=prefs.getString("diet_style","Gezond & gevarieerd");', 'String diet=prefs.getString("diet_style","Gezond & gevarieerd");\n        boolean hasSteamOven=prefs.getBoolean("steam_oven",false);\n        if(!hasSteamOven) banned.add("stoomoven");')
-mainText = mainText.replace('return planner.makeWeek(currentMonday,banned,max);', 'String favs=prefs.getString("favorites","");\n        if(hasSteamOven) favs=favs+", stoomoven";\n        return planner.makeWeek(currentMonday,banned,max,diet,household.nutritionFlags(),favs,menuVariant++);')
-mainText = mainText.replace('content.addView(section("Planning"));', 'content.addView(section("Apparatuur"));\n        CheckBox steamOven=new CheckBox(this);\n        steamOven.setText("Stoomoven aanwezig");\n        steamOven.setChecked(prefs.getBoolean("steam_oven",false));\n        steamOven.setTextColor(INK);\n        content.addView(steamOven);\n        content.addView(text("Als dit aan staat mogen recepten worden gekozen die de stoom- of combi-stoomfunctie gebruiken.",12,false,MUTED));\n\n        content.addView(section("Planning"));')
-mainText = mainText.replace('.putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins).apply();', '.putBoolean("steam_oven",steamOven.isChecked())\n                    .putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins).commit();')
+mainText = mainText.replace('private final Set<String> pantry = new LinkedHashSet<>();',
+        'private final Set<String> pantry = new LinkedHashSet<>();\n    private int menuVariant = 0;')
+mainText = mainText.replace('household = new HouseholdManager(prefs);',
+        'household = new HouseholdManager(prefs);\n        initV15Defaults();')
+mainText = mainText.replace('String breakfast=prefs.getString("breakfast","yoghurt / kwark, havermout, blauwe bessen");',
+        'String breakfast=breakfastForDate(m.date);')
+mainText = mainText.replace('''        if(breakfastPortions>0){
+            String breakfast=prefs.getString("breakfast","yoghurt / kwark, havermout, blauwe bessen");
+            for(String x:breakfast.split(",")) if(!x.trim().isEmpty()) all.putIfAbsent(x.trim(),"voor "+breakfastPortions+" ontbijt-porties");
+        }''',
+'''        if(breakfastPortions>0){
+            String breakfast=prefs.getString("breakfast","yoghurt / kwark");
+            for(String x:breakfast.split(",")) if(!x.trim().isEmpty()) all.putIfAbsent(x.trim(),"voor "+breakfastPortions+" ontbijt-porties");
+            addBreakfastFruitGroceries(all);
+        }''')
+mainText = mainText.replace('''        all.putIfAbsent("Kinder Bueno","1 multipack");
+        all.putIfAbsent("fruit","voor 7 dagen");
+        all.putIfAbsent("ongezouten noten","1 zak");''',
+'''        all.putIfAbsent("Kinder Bueno","1 multipack");
+        all.putIfAbsent("fruit","voor 7 dagen");
+        all.putIfAbsent("ongezouten noten","1 zak");
+        if(prefs.getBoolean("daily_veg_shot",true)){
+            all.putIfAbsent("AH 85% Groenteshot spinazie","4 stuks");
+            all.putIfAbsent("AH 85% Groenteshot wortel","3 stuks");
+        }''')
+mainText = mainText.replace('''        content.addView(section("Vaste lunchartikelen"));
+        EditText lunch=input("Lunchartikelen (komma's)",prefs.getString("lunch","volkoren brood, eieren, hummus, komkommer"));''',
+'''        content.addView(section("Ontbijtfruit"));
+        EditText breakfastFruits=input("Fruitvariatie bij ontbijt (komma's)",prefs.getString("breakfast_fruits","blauwe bessen, aardbeien, frambozen, kiwi, appel, peer, mandarijn"));
+        content.addView(breakfastFruits);
+        content.addView(text("MT Food roteert deze soorten per ontbijtdag.",12,false,MUTED));
+        content.addView(section("Dagelijkse groenteshot"));
+        CheckBox dailyShot=new CheckBox(this);
+        dailyShot.setText("1 AH groenteshot per dag");
+        dailyShot.setChecked(prefs.getBoolean("daily_veg_shot",true));
+        dailyShot.setTextColor(INK);
+        content.addView(dailyShot);
+        content.addView(text("Alleen AH 85% Groenteshot spinazie en AH 85% Groenteshot wortel; standaard 4× spinazie en 3× wortel per week.",12,false,MUTED));
 
-// Clear autosave explanation near top of Settings.
-mainText = mainText.replace('buildShell("Huishouden, 2-wekenrooster en voedingsprofiel", 3);', 'buildShell("Huishouden, 2-wekenrooster en voedingsprofiel", 3);\n        LinearLayout autoInfo=card(GREEN_LIGHT);\n        autoInfo.addView(text("✓ Wijzigingen worden automatisch opgeslagen",15,true,GREEN));\n        autoInfo.addView(text("Tekstvelden worden opgeslagen zodra je naar een ander veld of scherm gaat. De knop Opslaan blijft als extra zekerheid aanwezig.",12,false,MUTED));\n        content.addView(autoInfo);')
+        content.addView(section("Vaste lunchartikelen"));
+        EditText lunch=input("Lunchartikelen (komma's)",prefs.getString("lunch","volkoren brood, eieren, hummus, komkommer"));''')
+mainText = mainText.replace('''                    if(!found.isEmpty()) lines.add(new AhClient.AhLine(found.get(0).id,1)); else missed++;''',
+'''                    if(!found.isEmpty()) {
+                        int qty=1;
+                        if("AH 85% Groenteshot spinazie".equals(name)) qty=4;
+                        else if("AH 85% Groenteshot wortel".equals(name)) qty=3;
+                        lines.add(new AhClient.AhLine(found.get(0).id,qty));
+                    } else missed++;''')
+mainText = mainText.replace('String diet=prefs.getString("diet_style","Gezond & gevarieerd");',
+        'String diet=prefs.getString("diet_style","Gezond & gevarieerd");\n        boolean hasSteamOven=prefs.getBoolean("steam_oven",false);\n        if(!hasSteamOven) banned.add("stoomoven");')
+mainText = mainText.replace('return planner.makeWeek(currentMonday,banned,max);',
+        'String favs=prefs.getString("favorites","");\n        if(hasSteamOven) favs=favs+", stoomoven";\n        return planner.makeWeek(currentMonday,banned,max,diet,household.nutritionFlags(),favs,menuVariant++);')
+mainText = mainText.replace('content.addView(section("Planning"));',
+'''content.addView(section("Apparatuur"));
+        CheckBox steamOven=new CheckBox(this);
+        steamOven.setText("Stoomoven aanwezig");
+        steamOven.setChecked(prefs.getBoolean("steam_oven",false));
+        steamOven.setTextColor(INK);
+        content.addView(steamOven);
+        content.addView(text("Als dit aan staat mogen recepten worden gekozen die de stoom- of combi-stoomfunctie gebruiken.",12,false,MUTED));
 
-// Autosave the editable comma-separated fields whenever focus leaves the field.
-def autosaveHook = '''
+        content.addView(section("Planning"));''')
+mainText = mainText.replace('.putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins).apply();',
+        '.putBoolean("steam_oven",steamOven.isChecked())\n                    .putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins).commit();')
+mainText = mainText.replace('buildShell("Huishouden, 2-wekenrooster en voedingsprofiel", 3);',
+'''buildShell("Huishouden, 2-wekenrooster en voedingsprofiel", 3);
+        LinearLayout autoInfo=card(GREEN_LIGHT);
+        autoInfo.addView(text("✓ Wijzigingen worden automatisch opgeslagen",15,true,GREEN));
+        autoInfo.addView(text("Tekstvelden en de groenteshot-instelling worden direct opgeslagen.",12,false,MUTED));
+        content.addView(autoInfo);''')
+mainText = mainText.replace('Button save=primary("Opslaan");', 'Button save=primary("💾  Opslaan");')
+mainText = mainText.replace('Koppeling en veilige praktijktest • v1.1', 'Koppeling en veilige praktijktest • v1.5')
+mainText = mainText.replace('Jullie complete eetweek • ontbijt, lunch en avondeten', 'Jullie complete eetweek • fruitvariatie, profielen & apparatuur')
+
+// Inject autosave hooks after all fields exist.
+def autosaveMarker = '        Button save=primary("💾  Opslaan");'
+def autosaveCode = '''
         breakfast.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("breakfast",normalizeList(breakfast.getText().toString())).commit();}});
+        breakfastFruits.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("breakfast_fruits",normalizeList(breakfastFruits.getText().toString())).commit();}});
+        dailyShot.setOnCheckedChangeListener((b,checked)->prefs.edit().putBoolean("daily_veg_shot",checked).commit());
         lunch.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("lunch",normalizeList(lunch.getText().toString())).commit();}});
         fav.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("favorites",normalizeList(fav.getText().toString())).commit();}});
         banned.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("banned",normalizeList(banned.getText().toString())).commit();}});
         stock.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("pantry",normalizeList(stock.getText().toString())).commit();loadPantry();}});
 '''
-mainText = mainText.replace('Button save=primary("Opslaan");', autosaveHook + '\n        Button save=primary("💾  Opslaan");')
+mainText = mainText.replace(autosaveMarker, autosaveCode + '\n' + autosaveMarker)
 
-// Normalize text lists when the explicit save button is used as well.
-mainText = mainText.replace('prefs.edit().putString("breakfast",breakfast.getText().toString())\n                    .putString("lunch",lunch.getText().toString())\n                    .putString("favorites",fav.getText().toString())\n                    .putString("banned",banned.getText().toString())\n                    .putString("pantry",stock.getText().toString())', 'prefs.edit().putString("breakfast",normalizeList(breakfast.getText().toString()))\n                    .putString("lunch",normalizeList(lunch.getText().toString()))\n                    .putString("favorites",normalizeList(fav.getText().toString()))\n                    .putString("banned",normalizeList(banned.getText().toString()))\n                    .putString("pantry",normalizeList(stock.getText().toString()))')
-mainText = mainText.replace('private void loadPantry(){', '''private String normalizeList(String raw){
+mainText = mainText.replace('''            prefs.edit().putString("breakfast",breakfast.getText().toString())
+                    .putString("lunch",lunch.getText().toString())
+                    .putString("favorites",fav.getText().toString())
+                    .putString("banned",banned.getText().toString())
+                    .putString("pantry",stock.getText().toString())''',
+'''            prefs.edit().putString("breakfast",normalizeList(breakfast.getText().toString()))
+                    .putString("breakfast_fruits",normalizeList(breakfastFruits.getText().toString()))
+                    .putBoolean("daily_veg_shot",dailyShot.isChecked())
+                    .putString("lunch",normalizeList(lunch.getText().toString()))
+                    .putString("favorites",normalizeList(fav.getText().toString()))
+                    .putString("banned",normalizeList(banned.getText().toString()))
+                    .putString("pantry",normalizeList(stock.getText().toString()))''')
+
+// Helper methods for v1.5 and list normalization.
+mainText = mainText.replace('private void loadPantry(){',
+'''private void initV15Defaults(){
+        if(!prefs.contains("breakfast_fruits")) prefs.edit().putString("breakfast_fruits","blauwe bessen, aardbeien, frambozen, kiwi, appel, peer, mandarijn").commit();
+        if(!prefs.contains("daily_veg_shot")) prefs.edit().putBoolean("daily_veg_shot",true).commit();
+        if(!prefs.getBoolean("v15_breakfast_migrated",false)){
+            String raw=prefs.getString("breakfast","yoghurt / kwark, blauwe bessen");
+            ArrayList<String> keep=new ArrayList<>();
+            for(String x:raw.split(",")){
+                String t=x.trim();
+                if(t.equalsIgnoreCase("blauwe bessen") || t.equalsIgnoreCase("aardbeien") || t.equalsIgnoreCase("frambozen") || t.equalsIgnoreCase("kiwi") || t.equalsIgnoreCase("appel") || t.equalsIgnoreCase("peer") || t.equalsIgnoreCase("mandarijn")) continue;
+                if(!t.isEmpty()) keep.add(t);
+            }
+            prefs.edit().putString("breakfast",android.text.TextUtils.join(", ",keep)).putBoolean("v15_breakfast_migrated",true).commit();
+        }
+    }
+
+    private String breakfastFruitForDate(LocalDate date){
+        String raw=normalizeList(prefs.getString("breakfast_fruits","blauwe bessen, aardbeien, frambozen, kiwi, appel, peer, mandarijn"));
+        if(raw.isEmpty()) return "";
+        String[] fruits=raw.split(",");
+        return fruits[Math.floorMod(date.getDayOfYear(),fruits.length)].trim();
+    }
+
+    private String breakfastForDate(LocalDate date){
+        String base=normalizeList(prefs.getString("breakfast","yoghurt / kwark"));
+        String fruit=breakfastFruitForDate(date);
+        String out=base;
+        if(!fruit.isEmpty()) out+=(out.isEmpty()?"":" • ")+fruit;
+        if(prefs.getBoolean("daily_veg_shot",true)){
+            String shot=(date.getDayOfWeek().getValue()%2==1)?"AH groenteshot spinazie":"AH groenteshot wortel";
+            out+=(out.isEmpty()?"":" • ")+shot;
+        }
+        return out;
+    }
+
+    private void addBreakfastFruitGroceries(LinkedHashMap<String,String> all){
+        LinkedHashMap<String,Integer> counts=new LinkedHashMap<>();
+        for(int d=0;d<7;d++){
+            LocalDate date=currentMonday.plusDays(d);
+            int n=household.count(date,HouseholdManager.BREAKFAST);
+            if(n<=0) continue;
+            String f=breakfastFruitForDate(date);
+            if(!f.isEmpty()) counts.put(f,counts.getOrDefault(f,0)+n);
+        }
+        for(Map.Entry<String,Integer> e:counts.entrySet()) all.putIfAbsent(e.getKey(),"voor "+e.getValue()+" ontbijt-porties");
+    }
+
+    private String normalizeList(String raw){
         if(raw==null)return "";
         ArrayList<String> clean=new ArrayList<>();
         for(String x:raw.split(",")){
@@ -95,9 +222,10 @@ mainText = mainText.replace('private void loadPantry(){', '''private String norm
     }
 
     private void loadPantry(){''')
-mainText = mainText.replace('Koppeling en veilige praktijktest • v1.1', 'Koppeling en veilige praktijktest • v1.4')
-mainText = mainText.replace('Jullie complete eetweek • ontbijt, lunch en avondeten', 'Jullie complete eetweek • slim afgestemd op profielen & apparatuur')
-if(!mainText.contains('normalizeList') || !mainText.contains('setOnFocusChangeListener') || !mainText.contains('Wijzigingen worden automatisch opgeslagen')) throw new GradleException('v1.4 autosave wiring failed')
+
+if(!mainText.contains('breakfast_fruits') || !mainText.contains('daily_veg_shot') || !mainText.contains('AH 85% Groenteshot spinazie') || !mainText.contains('breakfastForDate') || !mainText.contains('normalizeList')) {
+    throw new GradleException('v1.5 breakfast/shot wiring failed')
+}
 mainActivity.write(mainText,'UTF-8')
 
 copy {
@@ -119,8 +247,8 @@ android {
         applicationId 'nl.weekplanner.ah'
         minSdk 26
         targetSdk 35
-        versionCode 14
-        versionName '1.4.0'
+        versionCode 15
+        versionName '1.5.0'
     }
 
     sourceSets {

@@ -9,7 +9,7 @@ val brokerTokenForBuild = (System.getenv("CAR_AI_BROKER_TOKEN") ?: "")
 
 android {
     namespace = "nl.chatgptauto.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "nl.chatgptauto.app"

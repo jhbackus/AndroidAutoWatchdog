@@ -12,21 +12,22 @@ m=m.replaceAll(/String calText\s*=\s*[^;]+;/,
 // 2) Remove the old day total between lunch and dinner, regardless of minor whitespace changes.
 m=m.replaceAll(/(?s)\s*if\(prefs\.getBoolean\("show_calories",false\)\)\s*\{\s*int dayCal\s*=\s*NutritionEstimator\.estimateTextMeal\(breakfast,true\)\s*\+\s*NutritionEstimator\.estimateTextMeal\(lunch,false\)\s*\+\s*NutritionEstimator\.estimateRecipeCalories\(m\.ingredients\);\s*c\.addView\(text\("≈ "\+dayCal\+" kcal totaal • volwassen portie",12,true,GREEN\)\);\s*\}\s*(?=LinearLayout dinner)/,'\n        ')
 
-// 3) Add the day total below dinner. Only active meals count.
+// 3) Add the day total immediately after the dinner view is added. Do not depend on the
+// exact click-handler syntax because the day-editor patch wraps that handler conditionally.
 if(!m.contains('Dagtotaal ≈')){
-    def pat=java.util.regex.Pattern.compile('c\\.addView\\(dinner\\);\\s*c\\.setOnClickListener\\(v->showRecipe\\(m\\)\\);')
-    def mm=pat.matcher(m)
-    if(!mm.find()) throw new GradleException('v3.9 preface: dinner card insertion marker missing')
-    String repl='''c.addView(dinner);
+    String dinnerMarker='        c.addView(dinner);'
+    int dinnerAt=m.indexOf(dinnerMarker)
+    if(dinnerAt<0) throw new GradleException('v3.9 preface: dinner view marker missing')
+    int insertAt=dinnerAt+dinnerMarker.length()
+    String total='''
         if(prefs.getBoolean("show_calories",false)){
             int dayCal=0;
             if(breakfastCount>0) dayCal+=NutritionEstimator.estimateTextMeal(breakfast,true);
             if(lunchCount>0) dayCal+=NutritionEstimator.estimateTextMeal(lunch,false);
             if(dinnerCount>0) dayCal+=NutritionEstimator.estimateRecipeCalories(m.ingredients);
             c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,true,GREEN));
-        }
-        c.setOnClickListener(v->showRecipe(m));'''
-    m=mm.replaceFirst(java.util.regex.Matcher.quoteReplacement(repl))
+        }'''
+    m=m.substring(0,insertAt)+total+m.substring(insertAt)
 }
 
 // 4) Remove dinner kcal from the recipe hero and put it immediately before Bereiding.

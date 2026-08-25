@@ -15,8 +15,8 @@ android {
         applicationId = "nl.chatgptauto.app"
         minSdk = 28
         targetSdk = 35
-        versionCode = 12
-        versionName = "0.4.1"
+        versionCode = 13
+        versionName = "0.4.2"
         buildConfigField("String", "BROKER_URL", "\"wss://bilateral.netwerkers.nl/chatgpt-auto\"")
         buildConfigField("String", "BROKER_TOKEN", "\"$brokerTokenForBuild\"")
     }

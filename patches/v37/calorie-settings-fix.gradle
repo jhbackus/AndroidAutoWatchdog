@@ -1,4 +1,4 @@
-// MT Food v3.7: reliably insert calorie settings even when earlier source patches changed surrounding text.
+// MT Food v3.7: reliably insert calorie settings in the Settings screen.
 def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
 def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
 def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
@@ -6,10 +6,17 @@ if(!mainFile.exists() || !plannerFile.exists()) throw new GradleException('v3.7:
 
 def m=mainFile.getText('UTF-8')
 
-// Insert the complete settings block immediately before the Settings save button if it is missing.
-if(!m.contains('Aantal calorieën weergeven?')) {
-    def marker='''        Button save=primary("Opslaan");'''
-    if(!m.contains(marker)) throw new GradleException('v3.7: settings save marker not found')
+// Work only inside showSettings(), because earlier patches have changed exact surrounding lines.
+int settingsStart=m.indexOf('    private void showSettings() {')
+int settingsEnd=m.indexOf('\n    private String profileEmoji',settingsStart)
+if(settingsStart<0 || settingsEnd<0) throw new GradleException('v3.7: showSettings method not found')
+String settings=m.substring(settingsStart,settingsEnd)
+
+if(!settings.contains('Aantal calorieën weergeven?')) {
+    int insertAt=settings.lastIndexOf('        content.addView(save);')
+    if(insertAt<0) insertAt=settings.lastIndexOf('        save.setOnClickListener')
+    if(insertAt<0) throw new GradleException('v3.7: settings insertion point not found')
+
     def block='''        content.addView(section("Calorieën"));
         CheckBox showCalories=new CheckBox(this);
         showCalories.setText("Aantal calorieën weergeven?");
@@ -27,22 +34,25 @@ if(!m.contains('Aantal calorieën weergeven?')) {
         content.addView(text("0 betekent geen limiet. Ontbijt, lunch en avondeten lopen van 0–1200 kcal in stappen van 100; het dagtotaal van 0–4000 kcal in stappen van 200.",12,false,MUTED));
 
 '''
-    m=m.replace(marker,block+marker)
+    settings=settings.substring(0,insertAt)+block+settings.substring(insertAt)
 }
 
-// Ensure saving the settings persists every calorie control.
-if(!m.contains('.putBoolean("show_calories",showCalories.isChecked())')) {
-    def saveMarker='''.putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins)'''
-    if(!m.contains(saveMarker)) throw new GradleException('v3.7: settings persistence marker not found')
-    m=m.replace(saveMarker,saveMarker+'''
-                    .putBoolean("show_calories",showCalories.isChecked())
+// Ensure the Save action persists all calorie controls. Inject immediately before apply() in this settings method.
+if(!settings.contains('.putBoolean("show_calories",showCalories.isChecked())')) {
+    int prefsStart=settings.indexOf('            prefs.edit()')
+    int applyAt=settings.indexOf('.apply();',prefsStart)
+    if(prefsStart<0 || applyAt<0) throw new GradleException('v3.7: settings persistence chain not found')
+    String persist='''.putBoolean("show_calories",showCalories.isChecked())
                     .putInt("max_cal_breakfast",spinnerInt(maxBreakfast))
                     .putInt("max_cal_lunch",spinnerInt(maxLunch))
                     .putInt("max_cal_dinner",spinnerInt(maxDinner))
-                    .putInt("max_cal_daily",spinnerInt(maxDaily))''')
+                    .putInt("max_cal_daily",spinnerInt(maxDaily))'''
+    settings=settings.substring(0,applyAt)+persist+settings.substring(applyAt)
 }
 
-// Helper widgets, only when the earlier v3.2 insertion did not add them.
+m=m.substring(0,settingsStart)+settings+m.substring(settingsEnd)
+
+// Helper widgets, only if an earlier patch did not add them.
 if(!m.contains('private Spinner numberSpinner(')) {
     def helperMarker='''    private String profileEmoji(HouseholdManager.Person p){'''
     if(!m.contains(helperMarker)) throw new GradleException('v3.7: helper insertion marker not found')
@@ -69,7 +79,7 @@ if(!m.contains('private Spinner numberSpinner(')) {
     m=m.replace(helperMarker,helpers+helperMarker)
 }
 
-// Ensure calorie display is visible in recipe detail when enabled.
+// Show calories in recipe detail when enabled.
 if(!m.contains('kcal per volwassen portie')) {
     def recipeMarker='''        content.addView(hero);'''
     def recipeBlock='''        if(prefs.getBoolean("show_calories",false))
@@ -80,7 +90,7 @@ if(!m.contains('kcal per volwassen portie')) {
 
 mainFile.write(m,'UTF-8')
 
-// Ensure the dinner calorie cap exists and is driven by Settings.
+// Ensure the dinner calorie cap exists.
 def p=plannerFile.getText('UTF-8')
 if(!p.contains('setDinnerCalorieCap')) {
     p=p.replace('''    private int variantCounter = 0;''','''    private int variantCounter = 0;
@@ -91,8 +101,8 @@ if(!p.contains('setDinnerCalorieCap')) {
 }
 plannerFile.write(p,'UTF-8')
 
-// Strict validation: do not ship another APK without the requested controls.
+// Strict validation: do not ship another APK without the requested controls and persistence.
 def check=mainFile.getText('UTF-8')
-for(String required : ['Aantal calorieën weergeven?','max_cal_breakfast','max_cal_lunch','max_cal_dinner','max_cal_daily','0–4000 kcal']) {
+for(String required : ['Aantal calorieën weergeven?','max_cal_breakfast','max_cal_lunch','max_cal_dinner','max_cal_daily','0–4000 kcal','.putBoolean("show_calories",showCalories.isChecked())']) {
     if(!check.contains(required)) throw new GradleException('v3.7 missing calorie setting: '+required)
 }

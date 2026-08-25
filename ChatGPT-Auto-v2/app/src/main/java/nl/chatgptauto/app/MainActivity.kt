@@ -21,8 +21,15 @@ class MainActivity : AppCompatActivity() {
         val status = findViewById<TextView>(R.id.status)
         val prefs = getSharedPreferences("chatgpt_auto", MODE_PRIVATE)
 
-        brokerUrl.setText(prefs.getString("broker_url", "wss://bilateral.netwerkers.nl/chatgpt-auto"))
-        brokerToken.setText(prefs.getString("broker_token", ""))
+        if (!prefs.contains("broker_url")) {
+            prefs.edit().putString("broker_url", BuildConfig.BROKER_URL).apply()
+        }
+        if (!prefs.contains("broker_token") && BuildConfig.BROKER_TOKEN.isNotBlank()) {
+            prefs.edit().putString("broker_token", BuildConfig.BROKER_TOKEN).apply()
+        }
+
+        brokerUrl.setText(prefs.getString("broker_url", BuildConfig.BROKER_URL))
+        brokerToken.setText(prefs.getString("broker_token", BuildConfig.BROKER_TOKEN))
 
         val voiceLabels = arrayOf(
             "Marin — vrouwelijk klinkend",

@@ -30,28 +30,14 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".BluetoothValidationActivity"
-            android:exported="true"
-            android:theme="@android:style/Theme.NoDisplay"
-            android:excludeFromRecents="true"
-            android:noHistory="true">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <data android:scheme="content" />
-                <data android:host="media" />
-                <data android:pathPrefix="/internal/audio/media/" />
-                <data android:mimeType="audio/*" />
-            </intent-filter>
-        </activity>
-
         <service
-            android:name=".CarAiMediaBrowserService"
+            android:name=".CarAiMediaLibraryService"
             android:icon="@mipmap/ic_launcher"
             android:label="CAR AI"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true">
             <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
@@ -70,5 +56,8 @@
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
+        <meta-data
+            android:name="androidx.car.app.TintableAttributionIcon"
+            android:resource="@drawable/ic_car_attribution" />
     </application>
 </manifest>

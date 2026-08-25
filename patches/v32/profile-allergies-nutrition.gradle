@@ -1,0 +1,91 @@
+// MT Food v3.2: per-person allergies, BMI and indicative nutrition targets.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def householdFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/HouseholdManager.java")
+if(!householdFile.exists()) throw new GradleException('v3.2: HouseholdManager not found')
+
+def h=householdFile.getText('UTF-8')
+
+h=h.replace('''        public boolean muscle;
+        public boolean[][] schedule = new boolean[14][3];''','''        public boolean muscle;
+        public double heightCm = 0;
+        public double weightKg = 0;
+        public String activity = "Gemiddeld";
+        public Set<String> allergies = new LinkedHashSet<>();
+        public String allergyOther = "";
+        public String allergyScope = "Persoonlijk";
+        public boolean[][] schedule = new boolean[14][3];''')
+
+h=h.replace('''        public String healthSummary() {''','''        public double bmi() {
+            if(heightCm<=0 || weightKg<=0) return 0;
+            double m=heightCm/100.0;
+            return weightKg/(m*m);
+        }
+
+        public String allergySummary(){
+            if(allergies.isEmpty() && (allergyOther==null || allergyOther.trim().isEmpty())) return "geen allergieën ingesteld";
+            List<String> x=new ArrayList<>(allergies);
+            if(allergyOther!=null && !allergyOther.trim().isEmpty()) x.add(allergyOther.trim());
+            return android.text.TextUtils.join(", ",x)+" • "+allergyScope;
+        }
+
+        public String nutritionTargetsSummary(){
+            boolean child="Kind".equals(type);
+            boolean female="Vrouw".equals(type);
+            double protein;
+            if(weightKg>0) protein=Math.max(child?0.95:0.83,(age>=65 || muscle)?1.0:0.83)*weightKg;
+            else protein=child?45: female?50:60;
+            int fiber=child?Math.max(18,Math.min(30,age+10)):female?30:35;
+            int calcium=(child && age>=10)?1200:(age>=50 || menopause || bone)?1200:1000;
+            int iron=child?11:(female && age<50?16:11);
+            int vitD=(age>=70)?20:10;
+            String bmiText=bmi()>0?String.format(Locale.ROOT," • BMI %.1f",bmi()):"";
+            return String.format(Locale.ROOT,"Richtwaarden: eiwit %.0f g • vezels %d g • calcium %d mg • ijzer %d mg • vit. D %d µg%s",protein,fiber,calcium,iron,vitD,bmiText);
+        }
+
+        public String healthSummary() {''')
+
+h=h.replace('''                o.put("bloodPressure",p.bloodPressure);o.put("bone",p.bone);o.put("muscle",p.muscle);''','''                o.put("bloodPressure",p.bloodPressure);o.put("bone",p.bone);o.put("muscle",p.muscle);
+                o.put("heightCm",p.heightCm);o.put("weightKg",p.weightKg);o.put("activity",p.activity);
+                JSONArray al=new JSONArray(); for(String a:p.allergies) al.put(a); o.put("allergies",al);
+                o.put("allergyOther",p.allergyOther);o.put("allergyScope",p.allergyScope);''')
+
+h=h.replace('''                    p.bloodPressure=o.optBoolean("bloodPressure");p.bone=o.optBoolean("bone");p.muscle=o.optBoolean("muscle");
+                    JSONArray sch=o.optJSONArray("schedule");''','''                    p.bloodPressure=o.optBoolean("bloodPressure");p.bone=o.optBoolean("bone");p.muscle=o.optBoolean("muscle");
+                    p.heightCm=o.optDouble("heightCm",0);p.weightKg=o.optDouble("weightKg",0);p.activity=o.optString("activity","Gemiddeld");
+                    JSONArray al=o.optJSONArray("allergies"); if(al!=null) for(int ai=0;ai<al.length();ai++){String a=al.optString(ai,"");if(!a.isEmpty())p.allergies.add(a);}
+                    p.allergyOther=o.optString("allergyOther","");p.allergyScope=o.optString("allergyScope","Persoonlijk");
+                    JSONArray sch=o.optJSONArray("schedule");''')
+
+h=h.replace('''    private int scheduleIndex(LocalDate date) {''','''    public Set<String> familyAllergyBans(){
+        Set<String> out=new LinkedHashSet<>();
+        for(Person p:people){
+            if(!"Hele gezin".equals(p.allergyScope)) continue;
+            for(String a:p.allergies) addAllergyBans(out,a);
+            if(p.allergyOther!=null && !p.allergyOther.trim().isEmpty()) out.add(p.allergyOther.trim());
+        }
+        return out;
+    }
+
+    public List<Person> personalAllergyPeople(){
+        List<Person> out=new ArrayList<>();
+        for(Person p:people) if("Persoonlijk".equals(p.allergyScope) && (!p.allergies.isEmpty() || (p.allergyOther!=null&&!p.allergyOther.trim().isEmpty()))) out.add(p);
+        return out;
+    }
+
+    private static void addAllergyBans(Set<String> out,String allergy){
+        String a=allergy.toLowerCase(Locale.ROOT);
+        if(a.contains("noten")||a.contains("pinda")) Collections.addAll(out,"noten","pinda","pindakaas");
+        else if(a.contains("lactose")||a.contains("melk")) Collections.addAll(out,"melk","yoghurt","kwark","kaas","room","feta","mozzarella","parmezaan");
+        else if(a.contains("gluten")) Collections.addAll(out,"pasta","brood","wrap","couscous","bulgur","gnocchi");
+        else if(a.contains("schaal")) Collections.addAll(out,"garnaal","garnalen","krab","kreeft","schaaldier");
+        else if(a.equals("vis")) Collections.addAll(out,"zalm","kabeljauw","vis");
+        else if(a.contains("ei")) out.add("ei");
+        else if(a.contains("soja")) Collections.addAll(out,"soja","tofu");
+        else if(a.contains("vlees")) Collections.addAll(out,"kip","rund","gehakt","eend","varken","lam","vlees");
+        else out.add(allergy);
+    }
+
+    private int scheduleIndex(LocalDate date) {''')
+
+if(!h.contains('allergyScope') || !h.contains('nutritionTargetsSummary') || !h.contains('familyAllergyBans')) throw new GradleException('v3.2 household patch failed')
+householdFile.write(h,'UTF-8')

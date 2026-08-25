@@ -5,7 +5,7 @@ on:
   push:
     branches: [ chatgpt-auto-v2 ]
     paths:
-      - 'ChatGPT-Auto-v2-source.zip'
+      - 'ChatGPT-Auto-v2/**'
       - '.github/workflows/build-chatgpt-auto-v2.yml'
 
 jobs:
@@ -25,23 +25,17 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Extract ChatGPT Auto source
-        run: |
-          rm -rf build-chatgpt-auto
-          mkdir build-chatgpt-auto
-          unzip -q ChatGPT-Auto-v2-source.zip -d build-chatgpt-auto
-
       - name: Build debug APK
-        working-directory: build-chatgpt-auto/ChatGPT-Auto-v2
+        working-directory: ChatGPT-Auto-v2
         run: gradle :app:assembleDebug --stacktrace
 
       - name: Verify APK
         run: |
-          test -f build-chatgpt-auto/ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk
-          ls -lh build-chatgpt-auto/ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk
+          test -f ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk
+          ls -lh ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: ChatGPT-Auto-v0.2.0-debug
-          path: build-chatgpt-auto/ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk
+          path: ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

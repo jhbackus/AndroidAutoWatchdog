@@ -3,6 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val brokerTokenForBuild = (System.getenv("CAR_AI_BROKER_TOKEN") ?: "")
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+
 android {
     namespace = "nl.chatgptauto.app"
     compileSdk = 35
@@ -11,8 +15,14 @@ android {
         applicationId = "nl.chatgptauto.app"
         minSdk = 28
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.4.0"
+        versionCode = 12
+        versionName = "0.4.1"
+        buildConfigField("String", "BROKER_URL", "\"wss://bilateral.netwerkers.nl/chatgpt-auto\"")
+        buildConfigField("String", "BROKER_TOKEN", "\"$brokerTokenForBuild\"")
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {

@@ -13,11 +13,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "nl.carai.androidauto"
+        applicationId = "nl.carai.androidauto.diag"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1000 + ciRunNumber
-        versionName = "0.4.6"
+        versionCode = 2000 + ciRunNumber
+        versionName = "0.4.7-diagnostic"
         buildConfigField("String", "BROKER_URL", "\"wss://bilateral.netwerkers.nl/chatgpt-auto\"")
         buildConfigField("String", "BROKER_TOKEN", "\"$brokerTokenForBuild\"")
     }

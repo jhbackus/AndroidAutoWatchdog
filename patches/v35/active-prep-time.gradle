@@ -1,0 +1,76 @@
+// MT Food v3.5: cooking limits mean active hands-on prep time; passive wait may be up to 60 minutes.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!plannerFile.exists() || !mainFile.exists()) throw new GradleException('v3.5: generated sources not found')
+
+def p=plannerFile.getText('UTF-8')
+
+// Public timing helpers for UI and all planner constraints.
+p=p.replace('''    private boolean allowed(Recipe r,Set<String>banned,int maxMinutes,String diet){
+        if(maxMinutes>0 && r.minutes>maxMinutes) return false;''','''    private boolean allowed(Recipe r,Set<String>banned,int maxMinutes,String diet){
+        if(maxMinutes>0 && activePrepMinutes(r)>maxMinutes) return false;
+        if(passiveWaitMinutes(r)>60) return false;''')
+
+// Weekday slot filters added in v3.4 must use active time rather than total elapsed time.
+p=p.replace('if(slotMax>0 && r.minutes>slotMax) continue;','if(slotMax>0 && activePrepMinutes(r)>slotMax) continue;')
+
+// Contextual replacement uses allowed(...), so the same active/passive rule applies there automatically.
+// Add timing estimators before cuisineKey. Passive time is inferred only from clearly passive instructions.
+p=p.replace('''    private static String cuisineKey(Recipe r){''','''    public int activeMinutes(Meal meal){
+        for(Recipe r:recipes) if(r.title.equals(meal.title)) return activePrepMinutes(r);
+        return meal.minutes;
+    }
+    public int passiveMinutes(Meal meal){
+        for(Recipe r:recipes) if(r.title.equals(meal.title)) return passiveWaitMinutes(r);
+        return 0;
+    }
+
+    private static int activePrepMinutes(Recipe r){
+        int passive=estimatedPassiveMinutes(r);
+        return Math.max(5,r.minutes-passive);
+    }
+    private static int passiveWaitMinutes(Recipe r){ return estimatedPassiveMinutes(r); }
+    private static int estimatedPassiveMinutes(Recipe r){
+        int passive=0;
+        java.util.regex.Pattern pat=java.util.regex.Pattern.compile("(\\\\d+)(?:[–-](\\\\d+))?\\\\s*(?:min|minuten)",java.util.regex.Pattern.CASE_INSENSITIVE);
+        for(String step:r.steps){
+            String low=step.toLowerCase(Locale.ROOT);
+            boolean wait=low.contains("oven")||low.contains("rooster")||low.contains("stoven")||low.contains("pruttel")||low.contains("sudder")||low.contains("marineer")||low.contains("rust")||low.contains("laat staan")||low.contains("laat zacht")||low.contains("laat gaar");
+            if(!wait) continue;
+            java.util.regex.Matcher mm=pat.matcher(step);
+            while(mm.find()){
+                int a=Integer.parseInt(mm.group(1));
+                int b=mm.group(2)!=null?Integer.parseInt(mm.group(2)):a;
+                passive+=Math.max(a,b);
+            }
+        }
+        // Never infer more passive time than the recipe's total elapsed time minus 5 min hands-on.
+        return Math.max(0,Math.min(Math.max(0,r.minutes-5),passive));
+    }
+
+    private static String cuisineKey(Recipe r){''')
+
+if(!p.contains('activePrepMinutes(r)>maxMinutes') || !p.contains('passiveWaitMinutes(r)>60') || !p.contains('public int activeMinutes(Meal meal)')) {
+    throw new GradleException('v3.5 active/prep planner patch failed')
+}
+plannerFile.write(p,'UTF-8')
+
+def m=mainFile.getText('UTF-8')
+
+// Clarify the setting label and explanatory copy.
+m=m.replace('Maximale kooktijd (minuten)','Maximale actieve bereidingstijd (minuten)')
+m=m.replace('Standaard 30 min. Het rooster kan per weekdag afwijken, bijvoorbeeld 60 min op zaterdag voor langere oven- of stoofgerechten.','Standaard 30 min actieve tijd. Oven-, marineer-, rust- en suddertijd telt niet mee, zolang de passieve wachttijd maximaal 60 min is. Het rooster kan per weekdag afwijken.')
+m=m.replace('Maximale kooktijd per weekdag','Maximale actieve bereidingstijd per weekdag')
+m=m.replace('Een dagwaarde overschrijft de algemene instelling. Gebruik bijvoorbeeld 60 minuten in het weekend om langere ovengerechten toe te laten.','Een dagwaarde overschrijft de algemene instelling. Alleen actieve tijd telt; passieve wachttijd mag maximaal 60 minuten zijn.')
+
+// Show active versus total time on week cards and recipe detail chips.
+m=m.replace('''labels.addView(text(m.category + "  •  " + m.minutes + " min", 12, false, MUTED));''','''int activeMin=planner.activeMinutes(m);
+        labels.addView(text(m.category + "  •  " + activeMin + " min actief" + (m.minutes>activeMin?"  •  "+m.minutes+" min totaal":""), 12, false, MUTED));''')
+m=m.replace('''hero.addView(chip(m.category + "   ·   " + m.minutes + " min"));''','''int activeMin=planner.activeMinutes(m);
+        int passiveMin=planner.passiveMinutes(m);
+        hero.addView(chip(m.category + "   ·   " + activeMin + " min actief" + (m.minutes>activeMin?"   ·   "+m.minutes+" min totaal":"")));
+        if(passiveMin>0) hero.addView(text("Waarvan circa "+passiveMin+" min passieve wacht-/oventijd.",12,false,MUTED));''')
+
+if(!m.contains('min actief') || !m.contains('passieve wacht-/oventijd')) throw new GradleException('v3.5 timing UI patch failed')
+mainFile.write(m,'UTF-8')

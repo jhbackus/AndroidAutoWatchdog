@@ -1,0 +1,154 @@
+// MT Food v3.12: context-aware substitution of banned ingredients in existing recipes.
+// Substitutable ingredients are adapted before the normal hard filters run. If no sensible
+// substitute exists, the original recipe is left unchanged and the existing banned filter excludes it.
+def ahProject=file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile=file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!plannerFile.exists()) throw new GradleException('v3.12 PlannerEngine missing')
+def p=plannerFile.getText('UTF-8')
+
+String helpers='''    private static boolean bannedContains(Set<String> banned,String value){
+        if(value==null) return false;
+        String v=value.toLowerCase(Locale.ROOT);
+        for(String ban:banned){
+            String b=ban==null?"":ban.toLowerCase(Locale.ROOT).trim();
+            if(!b.isEmpty() && v.contains(b)) return true;
+        }
+        return false;
+    }
+
+    private static String replaceIgnoreCase(String text,String needle,String replacement){
+        if(text==null || needle==null || needle.trim().isEmpty()) return text;
+        return text.replaceAll("(?i)"+java.util.regex.Pattern.quote(needle),java.util.regex.Matcher.quoteReplacement(replacement));
+    }
+
+    private static boolean isVegetableName(String n){
+        String x=n.toLowerCase(Locale.ROOT);
+        for(String v:Arrays.asList("courgette","aubergine","paprika","broccoli","bloemkool","spinazie","sperziebonen","wortel","paksoi","prei","komkommer","tomaat","doperwten","mais","maïs","rode ui","ui"))
+            if(x.contains(v)) return true;
+        return false;
+    }
+
+    private static boolean isLegumeName(String n){
+        String x=n.toLowerCase(Locale.ROOT);
+        return x.contains("kikkererwt") || x.contains("linzen") || x.contains("witte bonen") || x.contains("kidneybonen") || x.contains("zwarte bonen");
+    }
+
+    private static String vegetableBase(String n){
+        String x=n.toLowerCase(Locale.ROOT);
+        for(String v:Arrays.asList("courgette","aubergine","paprika","broccoli","bloemkool","spinazie","sperziebonen","wortel","paksoi","prei","komkommer","tomaat","doperwten","mais","maïs","rode ui","ui"))
+            if(x.contains(v)) return v;
+        return n;
+    }
+
+    private static List<String> contextualVegetableChoices(Recipe r,String original){
+        String cuisine=cuisineKey(r);
+        String o=original.toLowerCase(Locale.ROOT);
+        if(o.contains("komkommer") || o.contains("tomaat") || o.contains("rode ui")){
+            if("Grieks".equals(cuisine) || "Mediterraan".equals(cuisine) || "Libanees".equals(cuisine) || "Turks".equals(cuisine))
+                return Arrays.asList("paprika","tomaat","komkommer","rode ui","aubergine","courgette");
+            return Arrays.asList("paprika","wortel","komkommer","tomaat","courgette");
+        }
+        if("Grieks".equals(cuisine) || "Mediterraan".equals(cuisine))
+            return Arrays.asList("aubergine","courgette","paprika","spinazie","sperziebonen","broccoli","wortel","prei");
+        if("Italiaans".equals(cuisine) || "Spaans".equals(cuisine) || "Portugees".equals(cuisine) || "Frans".equals(cuisine))
+            return Arrays.asList("courgette","aubergine","paprika","broccoli","spinazie","wortel","prei","sperziebonen");
+        if("Indonesisch".equals(cuisine) || "Thais".equals(cuisine) || "Vietnamees".equals(cuisine) || "Japans".equals(cuisine) || "Koreaans".equals(cuisine) || "Chinees".equals(cuisine))
+            return Arrays.asList("paksoi","broccoli","wortel","sperziebonen","paprika","spinazie","courgette");
+        if("Indiaas".equals(cuisine))
+            return Arrays.asList("bloemkool","spinazie","sperziebonen","wortel","paprika","courgette");
+        if("Mexicaans".equals(cuisine))
+            return Arrays.asList("paprika","mais","courgette","spinazie","tomaat","wortel");
+        if("Marokkaans".equals(cuisine) || "Turks".equals(cuisine) || "Libanees".equals(cuisine))
+            return Arrays.asList("aubergine","courgette","paprika","wortel","spinazie","sperziebonen");
+        return Arrays.asList("broccoli","bloemkool","sperziebonen","wortel","courgette","paprika","spinazie","prei");
+    }
+
+    private static String chooseIngredientSubstitute(Recipe r,Ingredient ing,Set<String> banned){
+        String name=ing.name.toLowerCase(Locale.ROOT);
+        if(isVegetableName(name)){
+            String original=vegetableBase(name);
+            for(String candidate:contextualVegetableChoices(r,original)){
+                if(candidate.equalsIgnoreCase(original)) continue;
+                if(bannedContains(banned,candidate)) continue;
+                boolean already=false;
+                for(Ingredient other:r.ingredients) if(other!=ing && other.name.equalsIgnoreCase(candidate)){ already=true; break; }
+                if(!already) return candidate;
+            }
+            return null;
+        }
+        if(isLegumeName(name)){
+            List<String> choices;
+            String cuisine=cuisineKey(r);
+            if("Mexicaans".equals(cuisine)) choices=Arrays.asList("zwarte bonen","kidneybonen","linzen","witte bonen");
+            else if("Mediterraan".equals(cuisine) || "Grieks".equals(cuisine) || "Italiaans".equals(cuisine)) choices=Arrays.asList("witte bonen","linzen","kidneybonen");
+            else choices=Arrays.asList("linzen","witte bonen","kidneybonen","zwarte bonen");
+            for(String candidate:choices) if(!name.contains(candidate) && !bannedContains(banned,candidate)) return candidate;
+        }
+        return null;
+    }
+
+    private static Recipe adaptRecipeForBans(Recipe r,Set<String> banned){
+        if(banned==null || banned.isEmpty()) return r;
+        List<Ingredient> ingredients=new ArrayList<>();
+        String title=r.title;
+        String description=r.description;
+        List<String> steps=new ArrayList<>(r.steps);
+        boolean changed=false;
+
+        for(Ingredient ing:r.ingredients){
+            String matchedBan=null;
+            for(String ban:banned){
+                String b=ban==null?"":ban.toLowerCase(Locale.ROOT).trim();
+                if(!b.isEmpty() && ing.name.toLowerCase(Locale.ROOT).contains(b)){ matchedBan=b; break; }
+            }
+            if(matchedBan==null){ ingredients.add(ing); continue; }
+            String substitute=chooseIngredientSubstitute(r,ing,banned);
+            if(substitute==null){
+                // Keep it unchanged; allowed(...) will reject the recipe as before.
+                ingredients.add(ing);
+                continue;
+            }
+            String oldBase=isVegetableName(ing.name)?vegetableBase(ing.name):matchedBan;
+            ingredients.add(new Ingredient(substitute,ing.amount,ing.pantry));
+            title=replaceIgnoreCase(title,oldBase,substitute);
+            description=replaceIgnoreCase(description,oldBase,substitute);
+            for(int i=0;i<steps.size();i++) steps.set(i,replaceIgnoreCase(steps.get(i),oldBase,substitute));
+            changed=true;
+        }
+        if(!changed) return r;
+        return new Recipe(r.id+"-adapt-"+Math.abs(Objects.hash(title,banned)),title,r.emoji,r.category,r.minutes,description,String.join(" ",r.tags),ingredients,steps.toArray(new String[0]));
+    }
+
+'''
+
+if(!p.contains('private static Recipe adaptRecipeForBans')){
+    int at=p.indexOf('    private boolean allowed(Recipe r,Set<String>banned,int maxMinutes,String diet){')
+    if(at<0) throw new GradleException('v3.12 allowed marker missing')
+    p=p.substring(0,at)+helpers+p.substring(at)
+}
+
+// Week generation: adapt each recipe first, then run all existing hard filters on the adapted version.
+String oldWeek='''        List<Recipe> allowed=new ArrayList<>();
+        for(Recipe r:recipes) if(allowed(r,banned,maxMinutes,diet)) allowed.add(r);'''
+String newWeek='''        List<Recipe> allowed=new ArrayList<>();
+        for(Recipe source:recipes){
+            Recipe r=adaptRecipeForBans(source,banned);
+            if(allowed(r,banned,maxMinutes,diet)) allowed.add(r);
+        }'''
+if(p.contains(oldWeek)) p=p.replace(oldWeek,newWeek)
+else if(!p.contains('Recipe r=adaptRecipeForBans(source,banned);')) throw new GradleException('v3.12 week allowed-pool marker missing')
+
+// Single-meal replacement: use the same substitution logic so replacing one day behaves identically.
+String oldReplace='''        List<Recipe> allowedRecipes=new ArrayList<>();
+        for(Recipe r:recipes) if(allowed(r,banned,maxMinutes,diet)) allowedRecipes.add(r);'''
+String newReplace='''        List<Recipe> allowedRecipes=new ArrayList<>();
+        for(Recipe source:recipes){
+            Recipe r=adaptRecipeForBans(source,banned);
+            if(allowed(r,banned,maxMinutes,diet)) allowedRecipes.add(r);
+        }'''
+if(p.contains(oldReplace)) p=p.replace(oldReplace,newReplace)
+else if(!p.contains('List<Recipe> allowedRecipes=new ArrayList<>();\n        for(Recipe source:recipes)')) throw new GradleException('v3.12 replacement allowed-pool marker missing')
+
+if(!p.contains('contextualVegetableChoices') || !p.contains('adaptRecipeForBans(source,banned)'))
+    throw new GradleException('v3.12 contextual substitution validation failed')
+plannerFile.write(p,'UTF-8')

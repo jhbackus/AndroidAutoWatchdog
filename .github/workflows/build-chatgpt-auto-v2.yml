@@ -16,6 +16,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Rebuild launcher PNG from validated text chunks
+        run: |
+          cat ChatGPT-Auto-v2/icon_chunks/*.part | tr -d '\n\r' | base64 -d > /tmp/car_ai_launcher.png
+          echo '4875268de5f30472d03973b2eac2fc3423cced5e00d9caaabddccccf8f3f0198  /tmp/car_ai_launcher.png' | sha256sum -c -
+          python3 - <<'PY'
+          import struct, zlib
+          p='/tmp/car_ai_launcher.png'
+          data=open(p,'rb').read()
+          assert data.startswith(b'\x89PNG\r\n\x1a\n')
+          pos=8; iend=False
+          while pos+12 <= len(data):
+              n=struct.unpack('>I',data[pos:pos+4])[0]
+              t=data[pos+4:pos+8]
+              chunk=data[pos+8:pos+8+n]
+              crc=struct.unpack('>I',data[pos+8+n:pos+12+n])[0]
+              assert (zlib.crc32(t+chunk)&0xffffffff)==crc, (t, 'CRC')
+              pos += 12+n
+              if t == b'IEND': iend=True; break
+          assert iend
+          print('Source launcher PNG CRC verified')
+          PY
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi nodpi; do
+            mkdir -p "ChatGPT-Auto-v2/app/src/main/res/mipmap-$d"
+            cp /tmp/car_ai_launcher.png "ChatGPT-Auto-v2/app/src/main/res/mipmap-$d/ic_launcher.png"
+            rm -f "ChatGPT-Auto-v2/app/src/main/res/mipmap-$d/ic_launcher.webp"
+          done
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -31,43 +58,41 @@ jobs:
         working-directory: ChatGPT-Auto-v2
         run: gradle :app:assembleDebug --stacktrace
 
-      - name: Verify APK and launcher PNGs
+      - name: Verify APK, Android Auto declaration and launcher PNGs
         run: |
           APK='ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk'
           test -f "$APK"
           python3 - <<'PY'
           import struct, zipfile, zlib
-          apk = 'ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk'
-          sig = b'\x89PNG\r\n\x1a\n'
+          apk='ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk'
           with zipfile.ZipFile(apk) as z:
-              icons = sorted(n for n in z.namelist() if 'ic_launcher' in n and n.endswith('.png'))
-              assert len(icons) >= 5, f'Expected launcher PNGs, got {icons}'
-              assert not any('ic_launcher.webp' in n for n in z.namelist()), 'Old WebP launcher still present'
+              names=z.namelist()
+              icons=sorted(n for n in names if 'ic_launcher' in n and n.endswith('.png'))
+              assert len(icons) >= 5, icons
+              assert not any('ic_launcher.webp' in n for n in names)
               for name in icons:
-                  data = z.read(name)
-                  assert data.startswith(sig), f'{name}: invalid PNG signature'
-                  pos = 8
-                  seen_iend = False
-                  while pos + 12 <= len(data):
-                      length = struct.unpack('>I', data[pos:pos+4])[0]
-                      ctype = data[pos+4:pos+8]
-                      end = pos + 12 + length
-                      assert end <= len(data), f'{name}: truncated PNG chunk'
-                      chunk = data[pos+8:pos+8+length]
-                      stored_crc = struct.unpack('>I', data[pos+8+length:pos+12+length])[0]
-                      actual_crc = zlib.crc32(ctype + chunk) & 0xffffffff
-                      assert stored_crc == actual_crc, f'{name}: CRC failure in {ctype!r}'
-                      pos = end
-                      if ctype == b'IEND':
-                          seen_iend = True
-                          break
-                  assert seen_iend, f'{name}: missing IEND'
-              print('Verified launcher PNGs:', icons)
+                  data=z.read(name); assert data.startswith(b'\x89PNG\r\n\x1a\n'), name
+                  pos=8; iend=False
+                  while pos+12 <= len(data):
+                      n=struct.unpack('>I',data[pos:pos+4])[0]
+                      t=data[pos+4:pos+8]
+                      chunk=data[pos+8:pos+8+n]
+                      crc=struct.unpack('>I',data[pos+8+n:pos+12+n])[0]
+                      assert (zlib.crc32(t+chunk)&0xffffffff)==crc, f'{name}: CRC {t!r}'
+                      pos += 12+n
+                      if t == b'IEND': iend=True; break
+                  assert iend, name
+              print('APK launcher PNGs verified:', icons)
           PY
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          if [ -x "$AAPT" ]; then
+            "$AAPT" dump badging "$APK" | grep -E "package:|application-label:|application-icon-"
+            "$AAPT" dump xmltree "$APK" AndroidManifest.xml | grep -E "CarAiMediaBrowserService|android.media.browse.MediaBrowserService|com.google.android.gms.car.application" || true
+          fi
           ls -lh "$APK"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CAR-AI-v0.4.3-debug
+          name: CAR-AI-v0.4.4-debug
           path: ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

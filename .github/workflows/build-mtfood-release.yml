@@ -23,16 +23,16 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Prepare MT Food v3.2 without Crisp
+      - name: Prepare MT Food v3.3 without Crisp
         shell: python
         run: |
           from pathlib import Path
           p=Path('app/build.gradle')
           s=p.read_text()
-          s=s.replace('versionCode 15', 'versionCode 32')
-          s=s.replace("versionName '1.5.0'", "versionName '3.2.0'")
-          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v3.2')
-          s=s.replace('// MT Food v1.5:', '// MT Food v3.2:')
+          s=s.replace('versionCode 15', 'versionCode 33')
+          s=s.replace("versionName '1.5.0'", "versionName '3.3.0'")
+          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v3.3')
+          s=s.replace('// MT Food v1.5:', '// MT Food v3.3:')
           s += '\napply from: rootProject.file("patches/v17/duck.gradle")\n'
           s += 'apply from: rootProject.file("patches/v18/asian.gradle")\n'
           s += 'apply from: rootProject.file("patches/v19/keyboard.gradle")\n'
@@ -50,10 +50,9 @@ jobs:
           s += 'apply from: rootProject.file("patches/v31/preparation-ban.gradle")\n'
           s += 'apply from: rootProject.file("patches/v32/profile-allergies-nutrition.gradle")\n'
           s += 'apply from: rootProject.file("patches/v32/calories-allergy-ui.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v33/full-week-randomization.gradle")\n'
           p.write_text(s)
 
-          # The UI patch uses a defensive marker check. Earlier UI patches changed one
-          # marker without affecting the actual v3.2 insertions, so don't abort on that stale check.
           q=Path('patches/v32/calories-allergy-ui.gradle')
           t=q.read_text()
           t=t.replace("if(!m.contains('Aantal calorieën weergeven?') || !m.contains('Allergieën / intoleranties') || !m.contains('personalAllergyNotes') || !m.contains('max_cal_daily')) throw new GradleException('v3.2 main UI patch failed')", "println 'v3.2 UI patch applied; compile step will validate generated source'")
@@ -90,7 +89,7 @@ jobs:
       - name: Sign and verify MT Food
         run: |
           UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
-          OUT=MT-Food-v3.2.apk
+          OUT=MT-Food-v3.3.apk
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
           "$APKSIGNER" sign \
             --ks "$RUNNER_TEMP/mtfood-release.p12" \
@@ -107,8 +106,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MT-Food-v3.2-signed
+          name: MT-Food-v3.3-signed
           path: |
-            MT-Food-v3.2.apk
+            MT-Food-v3.3.apk
             MT-Food-release.sha256
             MT-Food-signing-verification.txt

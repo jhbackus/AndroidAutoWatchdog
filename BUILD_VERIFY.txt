@@ -1,1 +1,1 @@
-CAR AI v0.3.6 launcher icon binary fix commit 5493497dccc4d718cf8936b0d4db8e009caa41bb
+CAR AI v0.3.7 sharp icon + VPS broker build verification

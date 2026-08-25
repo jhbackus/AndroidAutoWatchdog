@@ -1,38 +1,27 @@
-// MT Food v3.8: place calorie controls before the Settings save listener and persist them there.
+// MT Food v3.8: deterministically scope calorie controls and persistence to showSettings().
 def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
 def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
 if(!mainFile.exists()) throw new GradleException('v3.8: generated MainActivity not found')
 
 def m=mainFile.getText('UTF-8')
 
-// First clean any accidental calorie references from the cooking-time schedule dialog.
-int scheduleStart=m.indexOf('    private void showCookingTimeSchedule(){')
-if(scheduleStart>=0){
-    int scheduleEnd=m.indexOf('\n    private ',scheduleStart+10)
-    if(scheduleEnd<0) scheduleEnd=m.length()
-    String schedule=m.substring(scheduleStart,scheduleEnd)
-    schedule=schedule.replaceAll(/(?s)\s*ed\.putBoolean\("show_calories",showCalories\.isChecked\(\)\)\s*\.putInt\("max_cal_breakfast",spinnerInt\(maxBreakfast\)\)\s*\.putInt\("max_cal_lunch",spinnerInt\(maxLunch\)\)\s*\.putInt\("max_cal_dinner",spinnerInt\(maxDinner\)\)\s*\.putInt\("max_cal_daily",spinnerInt\(maxDaily\)\)/,'')
-    m=m.substring(0,scheduleStart)+schedule+m.substring(scheduleEnd)
-}
-
 int settingsStart=m.indexOf('    private void showSettings() {')
 int settingsEnd=m.indexOf('\n    private ',settingsStart+10)
 if(settingsStart<0 || settingsEnd<0) throw new GradleException('v3.8: showSettings method not found')
 String settings=m.substring(settingsStart,settingsEnd)
 
-// Remove any previously inserted calorie block so we can put it in a deterministic scope.
+// Remove any earlier calorie UI block/fragments so this patch owns one clean implementation.
 int calStart=settings.indexOf('        content.addView(section("Calorieën"));')
 if(calStart>=0){
-    int calEnd=settings.indexOf('\n\n',calStart)
+    int calEnd=settings.indexOf('        save.setOnClickListener',calStart)
     if(calEnd<0) calEnd=settings.indexOf('        content.addView(save);',calStart)
-    if(calEnd>calStart) settings=settings.substring(0,calStart)+settings.substring(calEnd+2)
+    if(calEnd>calStart) settings=settings.substring(0,calStart)+settings.substring(calEnd)
 }
-
-// Remove any old persistence fragment before re-inserting it in the proper save chain.
 settings=settings.replaceAll(/(?s)\s*\.putBoolean\("show_calories",showCalories\.isChecked\(\)\)\s*\.putInt\("max_cal_breakfast",spinnerInt\(maxBreakfast\)\)\s*\.putInt\("max_cal_lunch",spinnerInt\(maxLunch\)\)\s*\.putInt\("max_cal_dinner",spinnerInt\(maxDinner\)\)\s*\.putInt\("max_cal_daily",spinnerInt\(maxDaily\)\)/,'')
 
-int saveDecl=settings.indexOf('        Button save=primary("Opslaan");')
-if(saveDecl<0) throw new GradleException('v3.8: Settings save declaration not found')
+// Variables only need to be declared before the listener that captures them.
+int listenerAt=settings.indexOf('        save.setOnClickListener')
+if(listenerAt<0) throw new GradleException('v3.8: Settings save listener not found')
 String block='''        content.addView(section("Calorieën"));
         CheckBox showCalories=new CheckBox(this);
         showCalories.setText("Aantal calorieën weergeven?");
@@ -50,23 +39,35 @@ String block='''        content.addView(section("Calorieën"));
         content.addView(text("0 betekent geen limiet. Ontbijt, lunch en avondeten: 0–1200 kcal in stappen van 100. Dagtotaal: 0–4000 kcal in stappen van 200.",12,false,MUTED));
 
 '''
-settings=settings.substring(0,saveDecl)+block+settings.substring(saveDecl)
+settings=settings.substring(0,listenerAt)+block+settings.substring(listenerAt)
 
-String cookMarker='.putInt("cook",mins)'
-int cookAt=settings.indexOf(cookMarker)
-if(cookAt<0) throw new GradleException('v3.8: cook persistence marker not found')
-String persistence='''.putInt("cook",mins)
-                    .putBoolean("show_calories",showCalories.isChecked())
+// Persist in the prefs.edit() chain belonging to this listener, independent of earlier formatting.
+listenerAt=settings.indexOf('        save.setOnClickListener')
+int prefsAt=settings.indexOf('prefs.edit()',listenerAt)
+int applyAt=prefsAt>=0 ? settings.indexOf('.apply();',prefsAt) : -1
+if(prefsAt<0 || applyAt<0) throw new GradleException('v3.8: Settings preferences save chain not found')
+String persistence='''.putBoolean("show_calories",showCalories.isChecked())
                     .putInt("max_cal_breakfast",spinnerInt(maxBreakfast))
                     .putInt("max_cal_lunch",spinnerInt(maxLunch))
                     .putInt("max_cal_dinner",spinnerInt(maxDinner))
                     .putInt("max_cal_daily",spinnerInt(maxDaily))'''
-settings=settings.substring(0,cookAt)+persistence+settings.substring(cookAt+cookMarker.length())
+settings=settings.substring(0,applyAt)+persistence+settings.substring(applyAt)
 
 m=m.substring(0,settingsStart)+settings+m.substring(settingsEnd)
+
+// Remove any leaked calorie variables from the separate cooking-time schedule method.
+int scheduleStart=m.indexOf('    private void showCookingTimeSchedule(){')
+if(scheduleStart>=0){
+    int scheduleEnd=m.indexOf('\n    private ',scheduleStart+10)
+    if(scheduleEnd<0) scheduleEnd=m.length()
+    String schedule=m.substring(scheduleStart,scheduleEnd)
+    schedule=schedule.replaceAll(/(?s)\s*\.putBoolean\("show_calories",showCalories\.isChecked\(\)\)\s*\.putInt\("max_cal_breakfast",spinnerInt\(maxBreakfast\)\)\s*\.putInt\("max_cal_lunch",spinnerInt\(maxLunch\)\)\s*\.putInt\("max_cal_dinner",spinnerInt\(maxDinner\)\)\s*\.putInt\("max_cal_daily",spinnerInt\(maxDaily\)\)/,'')
+    m=m.substring(0,scheduleStart)+schedule+m.substring(scheduleEnd)
+}
+
 mainFile.write(m,'UTF-8')
 
-// Strict scope validation.
+// Strict validation of final generated Java source.
 def check=mainFile.getText('UTF-8')
 settingsStart=check.indexOf('    private void showSettings() {')
 settingsEnd=check.indexOf('\n    private ',settingsStart+10)

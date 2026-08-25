@@ -1,0 +1,27 @@
+// MT Food v3.3: randomize recipe selection across every day of a newly generated week.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!plannerFile.exists()) throw new GradleException('v3.3: generated PlannerEngine not found')
+
+def p=plannerFile.getText('UTF-8')
+
+// Use a genuinely fresh generation seed. The existing hard constraints still decide feasibility,
+// but each generation gets a different candidate order and day/category order.
+p=p.replace('''        Random rnd=new Random(Objects.hash(monday.toString(),diet,variant));
+        List<String> targets=weeklyTargets(diet);''','''        Random rnd=new Random(Objects.hash(monday.toString(),diet,variant,System.nanoTime(),System.currentTimeMillis()));
+        Collections.shuffle(allowed,rnd);
+        List<String> targets=new ArrayList<>(weeklyTargets(diet));
+        Collections.shuffle(targets,rnd);''')
+
+// The old 2.5 point tie-break was too weak, so the same high-scoring recipe could keep winning
+// the first slot. Keep the category/health score relevant, but give all feasible recipes a
+// meaningful chance on every day.
+p=p.replace('''                s += rnd.nextDouble()*2.5; // tie-breaking variation, not enough to override major constraints''','''                s += rnd.nextDouble()*14.0; // meaningful per-generation randomization inside hard constraints''')
+
+// Fallback selection should also be randomized rather than favouring list order.
+p=p.replace('''                    double s=score(r,target,diet,nutritionFlags,favourites,usedProteins)+rnd.nextDouble();''','''                    double s=score(r,target,diet,nutritionFlags,favourites,usedProteins)+rnd.nextDouble()*14.0;''')
+
+if(!p.contains('System.nanoTime()') || !p.contains('Collections.shuffle(allowed,rnd)') || !p.contains('Collections.shuffle(targets,rnd)') || !p.contains('rnd.nextDouble()*14.0')) {
+    throw new GradleException('v3.3 full-week randomization patch failed')
+}
+plannerFile.write(p,'UTF-8')

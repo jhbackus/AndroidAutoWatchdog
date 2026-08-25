@@ -46,12 +46,14 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext) {
         }
 
         val prefs = carContext.getSharedPreferences("chatgpt_auto", Context.MODE_PRIVATE)
-        val brokerUrl = prefs.getString("broker_url", null)?.trim()
-        val brokerToken = prefs.getString("broker_token", null)?.trim()
+        val brokerUrl = prefs.getString("broker_url", BuildConfig.BROKER_URL)?.trim().orEmpty()
+        val brokerToken = prefs.getString("broker_token", BuildConfig.BROKER_TOKEN)?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: BuildConfig.BROKER_TOKEN.takeIf { it.isNotBlank() }
         val voice = prefs.getString("voice", "marin") ?: "marin"
 
-        if (brokerUrl.isNullOrBlank() || !(brokerUrl.startsWith("wss://") || brokerUrl.startsWith("ws://"))) {
-            state = "Stel eerst de WebSocket broker-URL in op je telefoon."
+        if (!(brokerUrl.startsWith("wss://") || brokerUrl.startsWith("ws://"))) {
+            state = "De CAR AI broker-URL is ongeldig."
             invalidate()
             return
         }

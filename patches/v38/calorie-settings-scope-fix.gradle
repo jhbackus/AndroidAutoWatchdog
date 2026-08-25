@@ -1,4 +1,4 @@
-// MT Food v3.8: deterministically scope calorie controls and persistence to showSettings().
+// MT Food v3.8: deterministically scope calorie controls and persist them independently.
 def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
 def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
 if(!mainFile.exists()) throw new GradleException('v3.8: generated MainActivity not found')
@@ -10,18 +10,17 @@ int settingsEnd=m.indexOf('\n    private ',settingsStart+10)
 if(settingsStart<0 || settingsEnd<0) throw new GradleException('v3.8: showSettings method not found')
 String settings=m.substring(settingsStart,settingsEnd)
 
-// Remove any earlier calorie UI block/fragments so this patch owns one clean implementation.
+// Remove earlier calorie UI/persistence fragments so this patch owns one clean implementation.
 int calStart=settings.indexOf('        content.addView(section("Calorieën"));')
 if(calStart>=0){
-    int calEnd=settings.indexOf('        save.setOnClickListener',calStart)
-    if(calEnd<0) calEnd=settings.indexOf('        content.addView(save);',calStart)
-    if(calEnd>calStart) settings=settings.substring(0,calStart)+settings.substring(calEnd)
+    int calEnd=settings.indexOf('        content.addView(save);',calStart)
+    if(calEnd<0) calEnd=settings.length()
+    settings=settings.substring(0,calStart)+settings.substring(calEnd)
 }
 settings=settings.replaceAll(/(?s)\s*\.putBoolean\("show_calories",showCalories\.isChecked\(\)\)\s*\.putInt\("max_cal_breakfast",spinnerInt\(maxBreakfast\)\)\s*\.putInt\("max_cal_lunch",spinnerInt\(maxLunch\)\)\s*\.putInt\("max_cal_dinner",spinnerInt\(maxDinner\)\)\s*\.putInt\("max_cal_daily",spinnerInt\(maxDaily\)\)/,'')
 
-// Variables only need to be declared before the listener that captures them.
-int listenerAt=settings.indexOf('        save.setOnClickListener')
-if(listenerAt<0) throw new GradleException('v3.8: Settings save listener not found')
+int insertAt=settings.indexOf('        content.addView(save);')
+if(insertAt<0) insertAt=settings.length()
 String block='''        content.addView(section("Calorieën"));
         CheckBox showCalories=new CheckBox(this);
         showCalories.setText("Aantal calorieën weergeven?");
@@ -38,24 +37,29 @@ String block='''        content.addView(section("Calorieën"));
         content.addView(labeledSpinner("Max. kcal totaal per dag (0 = geen limiet)",maxDaily));
         content.addView(text("0 betekent geen limiet. Ontbijt, lunch en avondeten: 0–1200 kcal in stappen van 100. Dagtotaal: 0–4000 kcal in stappen van 200.",12,false,MUTED));
 
+        showCalories.setOnCheckedChangeListener((buttonView,isChecked)->
+                prefs.edit().putBoolean("show_calories",isChecked).apply());
+        AdapterView.OnItemSelectedListener calorieListener=new AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(AdapterView<?> parent,View view,int position,long id){
+                prefs.edit()
+                        .putInt("max_cal_breakfast",spinnerInt(maxBreakfast))
+                        .putInt("max_cal_lunch",spinnerInt(maxLunch))
+                        .putInt("max_cal_dinner",spinnerInt(maxDinner))
+                        .putInt("max_cal_daily",spinnerInt(maxDaily))
+                        .apply();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent){}
+        };
+        maxBreakfast.setOnItemSelectedListener(calorieListener);
+        maxLunch.setOnItemSelectedListener(calorieListener);
+        maxDinner.setOnItemSelectedListener(calorieListener);
+        maxDaily.setOnItemSelectedListener(calorieListener);
+
 '''
-settings=settings.substring(0,listenerAt)+block+settings.substring(listenerAt)
-
-// Persist in the prefs.edit() chain belonging to this listener, independent of earlier formatting.
-listenerAt=settings.indexOf('        save.setOnClickListener')
-int prefsAt=settings.indexOf('prefs.edit()',listenerAt)
-int applyAt=prefsAt>=0 ? settings.indexOf('.apply();',prefsAt) : -1
-if(prefsAt<0 || applyAt<0) throw new GradleException('v3.8: Settings preferences save chain not found')
-String persistence='''.putBoolean("show_calories",showCalories.isChecked())
-                    .putInt("max_cal_breakfast",spinnerInt(maxBreakfast))
-                    .putInt("max_cal_lunch",spinnerInt(maxLunch))
-                    .putInt("max_cal_dinner",spinnerInt(maxDinner))
-                    .putInt("max_cal_daily",spinnerInt(maxDaily))'''
-settings=settings.substring(0,applyAt)+persistence+settings.substring(applyAt)
-
+settings=settings.substring(0,insertAt)+block+settings.substring(insertAt)
 m=m.substring(0,settingsStart)+settings+m.substring(settingsEnd)
 
-// Remove any leaked calorie variables from the separate cooking-time schedule method.
+// Remove accidental calorie references from the separate cooking-time schedule method.
 int scheduleStart=m.indexOf('    private void showCookingTimeSchedule(){')
 if(scheduleStart>=0){
     int scheduleEnd=m.indexOf('\n    private ',scheduleStart+10)
@@ -72,13 +76,9 @@ def check=mainFile.getText('UTF-8')
 settingsStart=check.indexOf('    private void showSettings() {')
 settingsEnd=check.indexOf('\n    private ',settingsStart+10)
 settings=check.substring(settingsStart,settingsEnd)
-for(String required : ['Aantal calorieën weergeven?','max_cal_breakfast','max_cal_lunch','max_cal_dinner','max_cal_daily','.putBoolean("show_calories",showCalories.isChecked())']){
+for(String required : ['Aantal calorieën weergeven?','max_cal_breakfast','max_cal_lunch','max_cal_dinner','max_cal_daily','setOnCheckedChangeListener','calorieListener']){
     if(!settings.contains(required)) throw new GradleException('v3.8 missing calorie setting: '+required)
 }
-int decl=settings.indexOf('CheckBox showCalories=')
-int listener=settings.indexOf('save.setOnClickListener')
-if(decl<0 || listener<0 || decl>listener) throw new GradleException('v3.8: calorie controls not declared before save listener')
-
 scheduleStart=check.indexOf('    private void showCookingTimeSchedule(){')
 if(scheduleStart>=0){
     int scheduleEnd=check.indexOf('\n    private ',scheduleStart+10)

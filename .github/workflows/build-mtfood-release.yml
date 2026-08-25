@@ -23,16 +23,16 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Prepare MT Food v3.7 without Crisp
+      - name: Prepare MT Food v3.8 without Crisp
         shell: python
         run: |
           from pathlib import Path
           p=Path('app/build.gradle')
           s=p.read_text()
-          s=s.replace('versionCode 15', 'versionCode 37')
-          s=s.replace("versionName '1.5.0'", "versionName '3.7.0'")
-          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v3.7')
-          s=s.replace('// MT Food v1.5:', '// MT Food v3.7:')
+          s=s.replace('versionCode 15', 'versionCode 38')
+          s=s.replace("versionName '1.5.0'", "versionName '3.8.0'")
+          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v3.8')
+          s=s.replace('// MT Food v1.5:', '// MT Food v3.8:')
           s += '\napply from: rootProject.file("patches/v17/duck.gradle")\n'
           s += 'apply from: rootProject.file("patches/v18/asian.gradle")\n'
           s += 'apply from: rootProject.file("patches/v19/keyboard.gradle")\n'
@@ -55,13 +55,13 @@ jobs:
           s += 'apply from: rootProject.file("patches/v35/active-prep-time.gradle")\n'
           s += 'apply from: rootProject.file("patches/v36/activity-label.gradle")\n'
           s += 'apply from: rootProject.file("patches/v37/calorie-settings-fix.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v38/calorie-settings-scope-fix.gradle")\n'
           p.write_text(s)
 
           q=Path('patches/v32/calories-allergy-ui.gradle')
           t=q.read_text()
-          t=t.replace("if(!m.contains('Aantal calorieën weergeven?') || !m.contains('Allergieën / intoleranties') || !m.contains('personalAllergyNotes') || !m.contains('max_cal_daily')) throw new GradleException('v3.2 main UI patch failed')", "println 'v3.2 UI patch applied; v3.7 performs strict calorie UI validation'")
+          t=t.replace("if(!m.contains('Aantal calorieën weergeven?') || !m.contains('Allergieën / intoleranties') || !m.contains('personalAllergyNotes') || !m.contains('max_cal_daily')) throw new GradleException('v3.2 main UI patch failed')", "println 'v3.2 UI patch applied; v3.8 performs strict calorie UI validation'")
           q.write_text(t)
-          print('v3.7 calorie settings retry 2')
 
       - name: Build unsigned release APK
         run: gradle assembleRelease --stacktrace
@@ -94,7 +94,7 @@ jobs:
       - name: Sign and verify MT Food
         run: |
           UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
-          OUT=MT-Food-v3.7.apk
+          OUT=MT-Food-v3.8.apk
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
           "$APKSIGNER" sign \
             --ks "$RUNNER_TEMP/mtfood-release.p12" \
@@ -111,8 +111,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MT-Food-v3.7-signed
+          name: MT-Food-v3.8-signed
           path: |
-            MT-Food-v3.7.apk
+            MT-Food-v3.8.apk
             MT-Food-release.sha256
             MT-Food-signing-verification.txt

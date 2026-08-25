@@ -23,16 +23,16 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Prepare MT Food v2.9 without Crisp
+      - name: Prepare MT Food v3.0 without Crisp
         shell: python
         run: |
           from pathlib import Path
           p=Path('app/build.gradle')
           s=p.read_text()
-          s=s.replace('versionCode 15', 'versionCode 29')
-          s=s.replace("versionName '1.5.0'", "versionName '2.9.0'")
-          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v2.9')
-          s=s.replace('// MT Food v1.5:', '// MT Food v2.9:')
+          s=s.replace('versionCode 15', 'versionCode 30')
+          s=s.replace("versionName '1.5.0'", "versionName '3.0.0'")
+          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v3.0')
+          s=s.replace('// MT Food v1.5:', '// MT Food v3.0:')
           # Crisp remains deliberately disabled until an official cart integration exists.
           s += '\napply from: rootProject.file("patches/v17/duck.gradle")\n'
           s += 'apply from: rootProject.file("patches/v18/asian.gradle")\n'
@@ -47,6 +47,7 @@ jobs:
           s += 'apply from: rootProject.file("patches/v27/detailed-instructions.gradle")\n'
           s += 'apply from: rootProject.file("patches/v28/cuisine-replacement-dialog.gradle")\n'
           s += 'apply from: rootProject.file("patches/v29/week-cuisine-diversity.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v30/vegetable-variety.gradle")\n'
           p.write_text(s)
 
       - name: Build unsigned release APK
@@ -81,7 +82,7 @@ jobs:
       - name: Sign and verify MT Food
         run: |
           UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
-          OUT=MT-Food-v2.9.apk
+          OUT=MT-Food-v3.0.apk
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
           "$APKSIGNER" sign \
             --ks "$RUNNER_TEMP/mtfood-release.p12" \
@@ -98,8 +99,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MT-Food-v2.9-signed
+          name: MT-Food-v3.0-signed
           path: |
-            MT-Food-v2.9.apk
+            MT-Food-v3.0.apk
             MT-Food-release.sha256
             MT-Food-signing-verification.txt

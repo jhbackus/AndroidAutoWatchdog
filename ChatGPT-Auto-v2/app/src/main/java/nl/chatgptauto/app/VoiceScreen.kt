@@ -20,7 +20,7 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext) {
                 CarIcon.Builder(
                     IconCompat.createWithResource(
                         carContext,
-                        if (running) android.R.drawable.ic_media_pause else android.R.drawable.ic_btn_speak_now
+                        if (running) android.R.drawable.ic_media_pause else R.drawable.car_ai_logo
                     )
                 ).build()
             )
@@ -29,6 +29,11 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext) {
 
         return MessageTemplate.Builder(state)
             .setTitle("CAR AI")
+            .setIcon(
+                CarIcon.Builder(
+                    IconCompat.createWithResource(carContext, R.drawable.car_ai_logo)
+                ).build()
+            )
             .setActionStrip(ActionStrip.Builder().addAction(action).build())
             .build()
     }

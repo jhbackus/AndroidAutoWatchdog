@@ -1,0 +1,18 @@
+// MT Food v3.6: clarify the personal activity-level selector.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!mainFile.exists()) throw new GradleException('v3.6: generated MainActivity not found')
+
+def m=mainFile.getText('UTF-8')
+
+def old='''        Spinner activity=new Spinner(this); String[] activities={"Weinig","Licht","Gemiddeld","Hoog"}; activity.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,activities));'''
+def repl='''        box.addView(text("Activiteitsniveau",14,true,INK));
+        Spinner activity=new Spinner(this); String[] activities={"Weinig","Licht","Gemiddeld","Hoog"}; activity.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,activities));'''
+if(!m.contains(old)) throw new GradleException('v3.6: activity spinner marker not found')
+m=m.replace(old,repl)
+
+m=m.replace('''        for(int ai=0;ai<activities.length;ai++) if(activities[ai].equals(p.activity)) activity.setSelection(ai); box.addView(activity);''','''        for(int ai=0;ai<activities.length;ai++) if(activities[ai].equals(p.activity)) activity.setSelection(ai); box.addView(activity);
+        box.addView(text("Gebruik dit voor de schatting van de dagelijkse energiebehoefte: Weinig = grotendeels zittend; Licht = regelmatig bewegen / 1–3× per week lichte sport; Gemiddeld = duidelijk actief / circa 3–5× per week sport; Hoog = zeer actief werk en/of vrijwel dagelijks intensief sporten.",12,false,MUTED));''')
+
+if(!m.contains('Activiteitsniveau') || !m.contains('Gebruik dit voor de schatting van de dagelijkse energiebehoefte')) throw new GradleException('v3.6 activity label patch failed')
+mainFile.write(m,'UTF-8')

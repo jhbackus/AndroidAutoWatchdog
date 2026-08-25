@@ -20,19 +20,41 @@ if(scheduleStart>=0){
     m=m.substring(0,scheduleStart)+schedule+m.substring(scheduleEnd)
 }
 
-// Validate the visible controls and that their persistence exists somewhere in showSettings.
+// Work only inside showSettings(). If an earlier patch added the visible controls but not
+// the persistence chain, add that chain here, directly before this method's prefs.apply().
 int settingsStart=m.indexOf('    private void showSettings() {')
-int settingsSaveEnd=m.indexOf('        content.addView(save);',settingsStart)
-if(settingsStart<0 || settingsSaveEnd<0) throw new GradleException('v3.8: showSettings save block not found')
-String settings=m.substring(settingsStart,settingsSaveEnd)
+int settingsEnd=m.indexOf('\n    private ',settingsStart+10)
+if(settingsStart<0 || settingsEnd<0) throw new GradleException('v3.8: showSettings method not found')
+String settings=m.substring(settingsStart,settingsEnd)
+
+if(!settings.contains('.putBoolean("show_calories",showCalories.isChecked())')){
+    int prefsStart=settings.indexOf('            prefs.edit()')
+    int applyAt=settings.indexOf('.apply();',prefsStart)
+    if(prefsStart<0 || applyAt<0) throw new GradleException('v3.8: settings persistence chain not found')
+    String persist='''.putBoolean("show_calories",showCalories.isChecked())
+                    .putInt("max_cal_breakfast",spinnerInt(maxBreakfast))
+                    .putInt("max_cal_lunch",spinnerInt(maxLunch))
+                    .putInt("max_cal_dinner",spinnerInt(maxDinner))
+                    .putInt("max_cal_daily",spinnerInt(maxDaily))'''
+    settings=settings.substring(0,applyAt)+persist+settings.substring(applyAt)
+    m=m.substring(0,settingsStart)+settings+m.substring(settingsEnd)
+}
+
+// Validate the visible controls and persistence in showSettings only.
+settingsStart=m.indexOf('    private void showSettings() {')
+settingsEnd=m.indexOf('\n    private ',settingsStart+10)
+settings=m.substring(settingsStart,settingsEnd)
 for(String required : ['Aantal calorieën weergeven?','max_cal_breakfast','max_cal_lunch','max_cal_dinner','max_cal_daily','.putBoolean("show_calories",showCalories.isChecked())']){
     if(!settings.contains(required)) throw new GradleException('v3.8: calorie setting not present in showSettings: '+required)
 }
+
+// Ensure calorie variables do not leak into the cooking schedule scope.
+scheduleStart=m.indexOf('    private void showCookingTimeSchedule(){')
 if(scheduleStart>=0){
-    int s2=m.indexOf('    private void showCookingTimeSchedule(){')
-    int e2=m.indexOf('\n    private String profileEmoji',s2)
+    int e2=m.indexOf('\n    private ',scheduleStart+10)
     if(e2<0) e2=m.length()
-    String scheduleCheck=m.substring(s2,e2)
+    String scheduleCheck=m.substring(scheduleStart,e2)
     if(scheduleCheck.contains('showCalories') || scheduleCheck.contains('max_cal_breakfast')) throw new GradleException('v3.8: calorie variables leaked into cooking schedule scope')
 }
+
 mainFile.write(m,'UTF-8')

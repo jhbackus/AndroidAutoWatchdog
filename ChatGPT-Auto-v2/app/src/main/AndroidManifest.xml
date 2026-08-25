@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <queries>
         <package android:name="com.spotify.music" />
@@ -28,10 +30,26 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".BluetoothValidationActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <data android:scheme="content" />
+                <data android:host="media" />
+                <data android:pathPrefix="/internal/audio/media/" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".CarAiMediaBrowserService"
             android:icon="@mipmap/ic_launcher"
             android:label="CAR AI"
+            android:foregroundServiceType="mediaPlayback"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />

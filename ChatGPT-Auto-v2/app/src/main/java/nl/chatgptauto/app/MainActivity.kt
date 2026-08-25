@@ -21,7 +21,7 @@ class MainActivity : AppCompatActivity() {
         val status = findViewById<TextView>(R.id.status)
         val prefs = getSharedPreferences("chatgpt_auto", MODE_PRIVATE)
 
-        brokerUrl.setText(prefs.getString("broker_url", ""))
+        brokerUrl.setText(prefs.getString("broker_url", "wss://bilateral.netwerkers.nl/chatgpt-auto"))
         brokerToken.setText(prefs.getString("broker_token", ""))
 
         val voiceLabels = arrayOf(
@@ -52,7 +52,7 @@ class MainActivity : AppCompatActivity() {
                     .putString("broker_token", token)
                     .putString("voice", voiceIds[voice.selectedItemPosition])
                     .apply()
-                status.text = "Opgeslagen. Verbind Android Auto en open ChatGPT Auto."
+                status.text = "Opgeslagen. Verbind Android Auto en open CAR AI."
             }
         }
 

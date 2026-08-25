@@ -19,6 +19,8 @@
 
         <activity
             android:name=".MainActivity"
+            android:icon="@drawable/car_ai_logo"
+            android:label="CAR AI"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -28,6 +30,8 @@
 
         <service
             android:name=".ChatGptCarAppService"
+            android:icon="@drawable/car_ai_logo"
+            android:label="CAR AI"
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
@@ -37,6 +41,7 @@
 
         <service
             android:name=".MediaAccessService"
+            android:icon="@drawable/car_ai_logo"
             android:label="CAR AI mediatoegang"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">

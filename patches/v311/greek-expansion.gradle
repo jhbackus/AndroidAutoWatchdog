@@ -1,0 +1,158 @@
+// MT Food v3.11: expand the Greek recipe pool with chickpea-free dishes, including melitzanosalata.
+def ahProject=file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile=file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!plannerFile.exists()) throw new GradleException('v3.11 PlannerEngine missing')
+def p=plannerFile.getText('UTF-8')
+
+if(!p.contains('seedGreekExpansion();')){
+    if(p.contains('public PlannerEngine(){ seedRecipes(); seedExpandedRecipes(); }')){
+        p=p.replace('public PlannerEngine(){ seedRecipes(); seedExpandedRecipes(); }','public PlannerEngine(){ seedRecipes(); seedExpandedRecipes(); seedGreekExpansion(); }')
+    } else {
+        throw new GradleException('v3.11 constructor marker missing')
+    }
+}
+
+String greekMethod='''    private void seedGreekExpansion(){
+        // All recipes in this expansion are intentionally chickpea-free.
+        recipes.add(new Recipe("greek-souvlaki-kip-melitzanosalata","Kipsouvlaki met melitzanosalata, pita en tomaat-komkommersalade","🍆","Anders",40,
+                "Griekse souvlaki met romige auberginedip; circa 25 minuten actief en 15 minuten passief.","balanced med greek chicken protein vegetables melitzanosalata child",
+                L(I("kipfilet","150 g p.p.",false),I("aubergine","120 g p.p.",false),I("volkoren pita","1 p.p.",false),I("tomaat","100 g p.p.",false),I("komkommer","100 g p.p.",false),I("Griekse yoghurt","45 g p.p.",false),I("citroen","1/4 p.p.",true),I("knoflook","naar smaak",true),I("oregano","naar smaak",true),I("olijfolie","1 el p.p.",true)),
+                "Rooster of grill de aubergine tot het vruchtvlees volledig zacht is; laat kort uitlekken.",
+                "Meng het auberginevruchtvlees met yoghurt, citroen, knoflook en olijfolie tot melitzanosalata.",
+                "Snijd de kip in blokjes, kruid met oregano en citroen en bak of grill in 8–10 minuten gaar.",
+                "Maak een salade van tomaat en komkommer en verwarm de pita kort.",
+                "Serveer de souvlaki met melitzanosalata, salade en pita."));
+
+        recipes.add(new Recipe("greek-melitzanosalata-feta-pita","Melitzanosalata met feta, volkoren pita en Griekse salade","🍆","Anders",35,
+                "Vegetarische Griekse mezze-maaltijd rond melitzanosalata; circa 20 minuten actief.","balanced med greek vegetarian veg vegetables melitzanosalata",
+                L(I("aubergine","180 g p.p.",false),I("feta","70 g p.p.",false),I("volkoren pita","1 p.p.",false),I("tomaat","120 g p.p.",false),I("komkommer","100 g p.p.",false),I("rode ui","30 g p.p.",false),I("citroen","1/4 p.p.",true),I("knoflook","naar smaak",true),I("peterselie","naar smaak",true),I("olijfolie","1 el p.p.",true)),
+                "Rooster de aubergine tot hij ingezakt en boterzacht is en lepel het vruchtvlees uit de schil.",
+                "Hak of prak het vruchtvlees en meng met citroen, knoflook, peterselie en olijfolie.",
+                "Snijd tomaat, komkommer en rode ui en verkruimel de feta erover.",
+                "Verwarm de pita en serveer met de melitzanosalata en salade."));
+
+        recipes.add(new Recipe("greek-kotopoulo-lemonato","Kotopoulo lemonato met krieltjes en sperziebonen","🍋","AVG",55,
+                "Griekse citroenkip uit de oven; circa 20 minuten actief en 35 minuten passief.","balanced med greek chicken protein oven vegetables child",
+                L(I("kippendijfilet","160 g p.p.",false),I("krieltjes","220 g p.p.",false),I("sperziebonen","160 g p.p.",false),I("citroen","1/3 p.p.",true),I("knoflook","naar smaak",true),I("oregano","naar smaak",true),I("olijfolie","1 el p.p.",true)),
+                "Verwarm de oven voor op 205 °C en halveer grotere krieltjes.",
+                "Meng kip en krieltjes met citroen, knoflook, oregano en olijfolie.",
+                "Rooster 30–35 minuten tot de kip gaar is en de krieltjes goudbruin zijn.",
+                "Kook de sperziebonen beetgaar en serveer ernaast."));
+
+        recipes.add(new Recipe("greek-bifteki-feta","Bifteki met feta, geroosterde aardappel en Griekse salade","🥩","AVG",45,
+                "Griekse gekruide gehaktburgers met feta; circa 30 minuten actief.","balanced med greek beef protein vegetables",
+                L(I("mager rundergehakt","150 g p.p.",false),I("feta","35 g p.p.",false),I("aardappelen","220 g p.p.",false),I("tomaat","100 g p.p.",false),I("komkommer","100 g p.p.",false),I("rode ui","25 g p.p.",false),I("oregano","naar smaak",true),I("olijfolie","1 el p.p.",true)),
+                "Snijd de aardappelen in parten, meng met olie en oregano en rooster ze op 210 °C.",
+                "Meng het gehakt met oregano, vorm bifteki en stop een beetje feta in het midden.",
+                "Bak de bifteki in 10–12 minuten rondom bruin en gaar.",
+                "Maak een salade van tomaat, komkommer en rode ui en serveer erbij."));
+
+        recipes.add(new Recipe("greek-soutzoukakia","Soutzoukakia in tomatensaus met zilvervliesrijst en courgette","🥩","Rijst",40,
+                "Griekse kruidige gehaktrolletjes in tomatensaus; circa 30 minuten actief.","balanced med greek beef protein vegetables",
+                L(I("mager rundergehakt","150 g p.p.",false),I("zilvervliesrijst","75 g p.p.",false),I("courgette","160 g p.p.",false),I("tomatenblokjes","150 g p.p.",false),I("knoflook","naar smaak",true),I("komijn","naar smaak",true),I("kaneel","snufje",true),I("olijfolie","1 el",true)),
+                "Kook de rijst volgens de verpakking.",
+                "Meng het gehakt met komijn, kaneel en knoflook en vorm kleine langwerpige rolletjes.",
+                "Bak de rolletjes rondom bruin, voeg tomatenblokjes toe en laat 12 minuten zacht pruttelen.",
+                "Bak de courgette apart beetgaar en serveer alles samen."));
+
+        recipes.add(new Recipe("greek-varkenssouvlaki","Varkenssouvlaki met paprika, tzatziki en bulgur","🍢","Anders",35,
+                "Snelle Griekse souvlaki met frisse tzatziki; circa 30 minuten actief.","balanced med greek pork protein vegetables",
+                L(I("varkenshaas","150 g p.p.",false),I("bulgur","75 g p.p.",false),I("paprika","150 g p.p.",false),I("komkommer","100 g p.p.",false),I("Griekse yoghurt","60 g p.p.",false),I("citroen","1/4 p.p.",true),I("oregano","naar smaak",true),I("knoflook","naar smaak",true)),
+                "Kook de bulgur en laat uitstomen.",
+                "Snijd de varkenshaas en paprika in gelijke stukken en rijg ze eventueel aan spiesen.",
+                "Bak of grill 8–10 minuten en keer regelmatig.",
+                "Meng yoghurt, geraspte komkommer, citroen en knoflook tot tzatziki en serveer erbij."));
+
+        recipes.add(new Recipe("greek-psari-plaki","Psari plaki met kabeljauw, tomaat, courgette en aardappel","🐟","AVG",50,
+                "Griekse ovenvis met tomaat en groenten; circa 20 minuten actief en 30 minuten passief.","balanced med greek fish cod protein vegetables oven",
+                L(I("kabeljauwfilet","160 g p.p.",false),I("aardappelen","200 g p.p.",false),I("courgette","140 g p.p.",false),I("tomaat","140 g p.p.",false),I("ui","40 g p.p.",false),I("citroen","1/4 p.p.",true),I("peterselie","naar smaak",true),I("olijfolie","1 el p.p.",true)),
+                "Verwarm de oven voor op 200 °C en snijd aardappel, courgette en ui in dunne plakken.",
+                "Bak of rooster de groenten 20 minuten voor met tomaat en olijfolie.",
+                "Leg de kabeljauw erop, besprenkel met citroen en bak nog 12–15 minuten.",
+                "Bestrooi met peterselie en serveer zodra de vis net uit elkaar valt."));
+
+        recipes.add(new Recipe("greek-zalm-dille","Griekse zalm met citroen-dille, spinazie en orzo","🐟","Pasta",30,
+                "Frisse Griekse zalmmaaltijd met orzo; circa 25 minuten actief.","balanced med greek fish salmon omega3 protein vegetables",
+                L(I("zalmfilet","150 g p.p.",false),I("orzo","75 g p.p.",false),I("spinazie","160 g p.p.",false),I("citroen","1/3 p.p.",true),I("dille","naar smaak",true),I("Griekse yoghurt","40 g p.p.",false),I("olijfolie","1 el",true)),
+                "Kook de orzo beetgaar.",
+                "Bak de zalm op middelhoog vuur tot hij net gaar is.",
+                "Laat de spinazie slinken en meng met orzo, citroen en dille.",
+                "Roer yoghurt met wat citroen tot saus en serveer bij de zalm."));
+
+        recipes.add(new Recipe("greek-gemista","Gemista met rijst, feta en kruiden","🫑","Rijst",60,
+                "Griekse gevulde paprika en tomaat; circa 30 minuten actief en 30 minuten in de oven.","balanced med greek vegetarian veg vegetables oven",
+                L(I("paprika","1 p.p.",false),I("tomaat","1 p.p.",false),I("zilvervliesrijst","65 g p.p.",false),I("feta","50 g p.p.",false),I("courgette","80 g p.p.",false),I("peterselie","naar smaak",true),I("munt","naar smaak",true),I("olijfolie","1 el p.p.",true)),
+                "Verwarm de oven voor op 190 °C en hol paprika en tomaat voorzichtig uit.",
+                "Kook de rijst halfgaar en meng met fijngesneden courgette, kruiden en de helft van de feta.",
+                "Vul de groenten, zet in een ovenschaal en bak ongeveer 30 minuten.",
+                "Verkruimel de resterende feta erover voor het serveren."));
+
+        recipes.add(new Recipe("greek-spanakopita-tray","Spanakopita-tray met spinazie, feta en tomatensalade","🥬","Anders",50,
+                "Ovenschotel geïnspireerd op spanakopita; circa 25 minuten actief en 25 minuten passief.","balanced med greek vegetarian veg vegetables oven",
+                L(I("spinazie","220 g p.p.",false),I("feta","70 g p.p.",false),I("filodeeg","60 g p.p.",false),I("ei","1 p.p.",false),I("tomaat","120 g p.p.",false),I("komkommer","80 g p.p.",false),I("dille","naar smaak",true),I("olijfolie","1 el",true)),
+                "Verwarm de oven voor op 190 °C en laat de spinazie slinken; druk overtollig vocht eruit.",
+                "Meng spinazie met feta, ei en dille en verdeel over een ovenschaal.",
+                "Leg filodeeg losjes bovenop, bestrijk licht met olie en bak 22–25 minuten goudbruin.",
+                "Maak ondertussen tomaat-komkommersalade en serveer erbij."));
+
+        recipes.add(new Recipe("greek-aubergine-feta-oven","Griekse aubergine-feta ovenschotel met krieltjes","🍆","AVG",55,
+                "Aubergine, tomaat en feta uit de oven; circa 25 minuten actief.","balanced med greek vegetarian veg vegetables oven",
+                L(I("aubergine","180 g p.p.",false),I("krieltjes","200 g p.p.",false),I("tomatenblokjes","140 g p.p.",false),I("feta","65 g p.p.",false),I("courgette","100 g p.p.",false),I("oregano","naar smaak",true),I("olijfolie","1 el p.p.",true)),
+                "Verwarm de oven voor op 205 °C en snijd aubergine en courgette in grove blokken.",
+                "Rooster krieltjes en groenten 25 minuten met olijfolie en oregano.",
+                "Voeg tomatenblokjes toe, verkruimel feta erover en bak nog 10–12 minuten.",
+                "Laat 3 minuten staan voor het serveren."));
+
+        recipes.add(new Recipe("greek-kip-giouvetsi","Griekse kip-giouvetsi met orzo en wortel","🍗","Pasta",45,
+                "Griekse eenpanskip met orzo; circa 25 minuten actief en 20 minuten zacht garen.","balanced med greek chicken protein vegetables",
+                L(I("kipfilet","150 g p.p.",false),I("orzo","75 g p.p.",false),I("wortel","130 g p.p.",false),I("tomatenblokjes","140 g p.p.",false),I("ui","35 g p.p.",false),I("kaneel","snufje",true),I("oregano","naar smaak",true)),
+                "Snijd kip, wortel en ui en bak de kip rondom aan.",
+                "Voeg ui, wortel, tomaat, oregano en een klein snufje kaneel toe.",
+                "Roer de orzo erdoor met voldoende water of bouillon en laat ongeveer 15–18 minuten zacht garen.",
+                "Roer geregeld en serveer zodra de orzo gaar en romig is."));
+
+        recipes.add(new Recipe("greek-fasolakia-aardappel","Fasolakia met aardappel, sperziebonen en feta","🫛","AVG",45,
+                "Griekse sperziebonenstoof zonder kikkererwten; circa 25 minuten actief.","balanced med greek vegetarian veg vegetables",
+                L(I("sperziebonen","220 g p.p.",false),I("aardappelen","220 g p.p.",false),I("tomatenblokjes","150 g p.p.",false),I("feta","55 g p.p.",false),I("ui","35 g p.p.",false),I("dille","naar smaak",true),I("olijfolie","1 el p.p.",true)),
+                "Snijd de aardappel in blokjes en de ui fijn.",
+                "Fruit de ui, voeg aardappel, sperziebonen en tomaat toe en schep goed om.",
+                "Laat met een scheut water 20–25 minuten zacht stoven tot alles gaar is.",
+                "Werk af met dille en feta."));
+
+        recipes.add(new Recipe("greek-koefte-citroen","Griekse gehaktballetjes met citroen, courgette en couscous","🥩","Anders",35,
+                "Frisse Griekse gehaktballetjes met citroen en kruiden; circa 30 minuten actief.","balanced med greek beef protein vegetables",
+                L(I("gehaktballen","150 g p.p.",false),I("volkoren couscous","75 g p.p.",false),I("courgette","160 g p.p.",false),I("spinazie","100 g p.p.",false),I("citroen","1/4 p.p.",true),I("peterselie","naar smaak",true),I("oregano","naar smaak",true)),
+                "Bereid de couscous volgens de verpakking.",
+                "Bak de gehaktballetjes rondom bruin en gaar.",
+                "Bak courgette en spinazie kort mee en breng op smaak met citroen, peterselie en oregano.",
+                "Serveer met de couscous."));
+
+        recipes.add(new Recipe("greek-kip-prasorizo","Griekse citroenkip met prasorizo van prei en rijst","🍋","Rijst",40,
+                "Griekse rijst met prei en citroen naast gebakken kip; circa 30 minuten actief.","balanced med greek chicken protein vegetables",
+                L(I("kipfilet","150 g p.p.",false),I("zilvervliesrijst","75 g p.p.",false),I("prei","170 g p.p.",false),I("spinazie","100 g p.p.",false),I("citroen","1/3 p.p.",true),I("dille","naar smaak",true),I("olijfolie","1 el",true)),
+                "Snijd de prei in dunne ringen en bak zacht in olijfolie.",
+                "Voeg rijst en water toe en kook tot de rijst gaar is; schep de spinazie er op het einde door.",
+                "Bak de kip apart goudbruin en gaar.",
+                "Breng de prasorizo op smaak met citroen en dille en serveer met de kip."));
+
+        recipes.add(new Recipe("greek-moussaka-light","Lichtere moussaka met aubergine, aardappel en rundergehakt","🍆","AVG",60,
+                "Griekse moussaka met yoghurtlaag; circa 30 minuten actief en 30 minuten in de oven.","balanced med greek beef protein vegetables oven",
+                L(I("mager rundergehakt","140 g p.p.",false),I("aubergine","170 g p.p.",false),I("aardappelen","180 g p.p.",false),I("tomatenblokjes","120 g p.p.",false),I("Griekse yoghurt","70 g p.p.",false),I("ei","1/2 p.p.",false),I("kaneel","snufje",true),I("oregano","naar smaak",true)),
+                "Verwarm de oven voor op 195 °C en bak of rooster dunne plakken aubergine en aardappel kort voor.",
+                "Bak het gehakt rul met tomaat, oregano en een klein snufje kaneel.",
+                "Laag aardappel, aubergine en gehaktsaus in een ovenschaal.",
+                "Meng yoghurt met ei, verdeel bovenop en bak circa 30 minuten tot de bovenkant stevig en licht gekleurd is."));
+    }
+
+'''
+
+if(!p.contains('private void seedGreekExpansion(){')){
+    int at=p.indexOf('    private void seedRecipes(){')
+    if(at<0) throw new GradleException('v3.11 seedRecipes marker missing')
+    p=p.substring(0,at)+greekMethod+p.substring(at)
+}
+
+if(!p.contains('greek-souvlaki-kip-melitzanosalata') || !p.contains('greek-melitzanosalata-feta-pita') || !p.contains('seedGreekExpansion();'))
+    throw new GradleException('v3.11 Greek expansion validation failed')
+
+plannerFile.write(p,'UTF-8')

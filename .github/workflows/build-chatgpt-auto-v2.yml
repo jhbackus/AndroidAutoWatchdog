@@ -1,4 +1,4 @@
-name: Build ChatGPT Auto v0.2.0 APK
+name: Build CAR AI APK
 
 on:
   workflow_dispatch:
@@ -11,6 +11,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      CAR_AI_BROKER_TOKEN: ${{ secrets.CAR_AI_BROKER_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +38,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ChatGPT-Auto-v0.2.0-debug
+          name: CAR-AI-v0.4.1-debug
           path: ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

@@ -1,0 +1,305 @@
+// MT Food v3.2: allergy-aware UI/portions + calorie settings and estimates.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+def householdFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/HouseholdManager.java")
+def estimatorFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/NutritionEstimator.java")
+if(!plannerFile.exists() || !mainFile.exists() || !householdFile.exists()) throw new GradleException('v3.2 generated sources not found')
+
+estimatorFile.text = '''package nl.weekplanner.ah;
+
+import java.util.*;
+import java.util.regex.*;
+
+public final class NutritionEstimator {
+    private NutritionEstimator(){}
+
+    public static int estimateRecipeCalories(List<PlannerEngine.Ingredient> ingredients){
+        double total=0;
+        for(PlannerEngine.Ingredient i:ingredients) total+=ingredientCalories(i.name,i.amount);
+        return (int)Math.round(total/10.0)*10;
+    }
+
+    public static int estimateTextMeal(String text, boolean breakfast){
+        if(text==null) return breakfast?300:400;
+        String s=text.toLowerCase(Locale.ROOT); double c=0;
+        if(s.contains("yoghurt")||s.contains("kwark")) c+=120;
+        if(s.contains("havermout")) c+=150;
+        if(s.contains("bessen")||s.contains("fruit")) c+=60;
+        if(s.contains("brood")) c+=180;
+        if(s.contains("ei")) c+=80;
+        if(s.contains("hummus")) c+=70;
+        if(s.contains("kaas")) c+=90;
+        if(s.contains("noten")) c+=110;
+        if(s.contains("pindakaas")) c+=100;
+        if(s.contains("komkommer")||s.contains("tomaat")) c+=20;
+        if(c<100) c=breakfast?300:400;
+        return (int)Math.round(c/10.0)*10;
+    }
+
+    private static double ingredientCalories(String name,String amount){
+        String n=name.toLowerCase(Locale.ROOT);
+        double q=number(amount);
+        boolean ml=amount.toLowerCase(Locale.ROOT).contains("ml");
+        if(n.contains("olie")) return q>0?q*8.8:90;
+        if(n.contains("pasta")||n.contains("rijst")||n.contains("couscous")||n.contains("bulgur")||n.contains("noedel")) return q>0?q*3.5:260;
+        if(n.contains("gnocchi")) return q>0?q*1.5:270;
+        if(n.contains("aardappel")||n.contains("krielt")) return q>0?q*0.8:175;
+        if(n.contains("wrap")) return q>0?q*160:320;
+        if(n.contains("brood")) return q>0?q*2.5:180;
+        if(n.contains("zalm")) return q>0?q*2.1:300;
+        if(n.contains("kabeljauw")||n.equals("vis")||n.contains("visfilet")) return q>0?q*0.9:150;
+        if(n.contains("kip")||n.contains("rund")||n.contains("gehakt")||n.contains("eend")||n.contains("varken")||n.contains("lam")) return q>0?q*1.7:240;
+        if(n.contains("tofu")) return q>0?q*1.25:190;
+        if(n.contains("kikkererwt")||n.contains("bonen")||n.contains("linzen")) return q>0?q*1.2:150;
+        if(n.equals("ei")||n.contains("eieren")) return q>0?q*80:80;
+        if(n.contains("kaas")||n.contains("feta")||n.contains("mozzarella")||n.contains("roomkaas")||n.contains("parmeza")) return q>0?q*2.8:100;
+        if(n.contains("yoghurt")||n.contains("kwark")||n.contains("melk")) return q>0?q*0.6:40;
+        if(n.contains("pesto")) return q>0?q*4.5:90;
+        if(n.contains("pinda")||n.contains("noten")) return q>0?q*6.0:120;
+        if(n.contains("kokosmelk")) return q>0?q*1.3:130;
+        if(n.contains("honing")) return q>0?q*3.0:25;
+        if(n.contains("saus")||n.contains("ketjap")||n.contains("soja")) return q>0?q*0.8:25;
+        if(n.contains("groente")||n.contains("broccoli")||n.contains("bloemkool")||n.contains("spinazie")||n.contains("courgette")||n.contains("paprika")||n.contains("wortel")||n.contains("aubergine")||n.contains("paksoi")||n.contains("tomaat")||n.contains("komkommer")||n.contains("prei")||n.contains("sla")) return q>0?q*0.3:40;
+        if(ml && q>0) return q*0.5;
+        return q>0?Math.min(100,q*0.4):15;
+    }
+    private static double number(String s){
+        Matcher m=Pattern.compile("([0-9]+(?:[.,][0-9]+)?)").matcher(s==null?"":s);
+        if(!m.find()) return 0;
+        try{return Double.parseDouble(m.group(1).replace(',','.'));}catch(Exception e){return 0;}
+    }
+}
+'''
+
+// Add fuller profile targets, including an approximate adult energy need.
+def h=householdFile.getText('UTF-8')
+h=h.replace('''        public String healthSummary() {''','''        public String nutritionTargetsDetailed(){
+            boolean child="Kind".equals(type), female="Vrouw".equals(type);
+            double protein=weightKg>0?Math.max(child?0.95:0.83,(age>=65||muscle)?1.0:0.83)*weightKg:(child?45:(female?50:60));
+            int fiber=child?Math.max(18,Math.min(30,age+10)):(female?30:35);
+            int calcium=(child&&age>=10)?1200:(age>=50||menopause||bone)?1200:1000;
+            int iron=child?11:(female&&age<50?16:11);
+            int vitD=age>=70?20:10, b12=3, folate=300, potassium=female?3500:3500;
+            String energy="afhankelijk van groei/activiteit";
+            if(!child && weightKg>0 && heightCm>0){
+                double bmr=10*weightKg+6.25*heightCm-5*age+(female?-161:5);
+                double factor="Weinig".equals(activity)?1.2:"Licht".equals(activity)?1.375:"Hoog".equals(activity)?1.725:1.55;
+                energy=Math.round((bmr*factor)/50.0)*50+" kcal/dag (schatting)";
+            }
+            return String.format(Locale.ROOT,"Indicatieve dagelijkse richtwaarden\\nEnergie: %s\\nEiwit: %.0f g\\nVezels: %d g\\nCalcium: %d mg\\nIJzer: %d mg\\nVitamine D: %d µg\\nVitamine B12: %d µg\\nFolaat: %d µg\\nKalium: %d mg\\nOmega-3: 1–2 porties vette vis per week / plantaardige bronnen\\nVocht: circa 1,5–2 liter, afhankelijk van omstandigheden",energy,protein,fiber,calcium,iron,vitD,b12,folate,potassium);
+        }
+
+        public String healthSummary() {''')
+householdFile.write(h,'UTF-8')
+
+// Planner: hard cap for estimated adult dinner calories.
+def p=plannerFile.getText('UTF-8')
+p=p.replace('''    private int variantCounter = 0;''','''    private int variantCounter = 0;
+    private int dinnerCalorieCap = 0;
+    public void setDinnerCalorieCap(int cap){ dinnerCalorieCap=Math.max(0,cap); }''')
+p=p.replace('''    private boolean allowed(Recipe r,Set<String>banned,int maxMinutes,String diet){
+        if(maxMinutes>0 && r.minutes>maxMinutes) return false;''','''    private boolean allowed(Recipe r,Set<String>banned,int maxMinutes,String diet){
+        if(maxMinutes>0 && r.minutes>maxMinutes) return false;
+        if(dinnerCalorieCap>0 && NutritionEstimator.estimateRecipeCalories(r.ingredients)>dinnerCalorieCap) return false;''')
+if(!p.contains('setDinnerCalorieCap') || !p.contains('NutritionEstimator.estimateRecipeCalories')) throw new GradleException('v3.2 calorie planner patch failed')
+plannerFile.write(p,'UTF-8')
+
+// Main activity UI and allergy-aware adaptation.
+def m=mainFile.getText('UTF-8')
+
+m=m.replace('''            pc.addView(text(p.healthSummary(),13,false,MUTED));''','''            pc.addView(text(p.healthSummary(),13,false,MUTED));
+            pc.addView(text("Allergieën: "+p.allergySummary(),12,false,MUTED));
+            pc.addView(text(p.nutritionTargetsSummary(),12,false,GREEN));''')
+
+m=m.replace('''        EditText age=input("Leeftijd",String.valueOf(p.age)); age.setInputType(2); box.addView(age);
+
+        box.addView(text("Medische/voedingsaandacht",16,true,INK));''','''        EditText age=input("Leeftijd",String.valueOf(p.age)); age.setInputType(2); box.addView(age);
+        EditText height=input("Lengte (cm)",p.heightCm>0?String.valueOf(p.heightCm):""); height.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL); box.addView(height);
+        EditText weight=input("Gewicht (kg)",p.weightKg>0?String.valueOf(p.weightKg):""); weight.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL); box.addView(weight);
+        Spinner activity=new Spinner(this); String[] activities={"Weinig","Licht","Gemiddeld","Hoog"}; activity.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,activities));
+        for(int ai=0;ai<activities.length;ai++) if(activities[ai].equals(p.activity)) activity.setSelection(ai); box.addView(activity);
+        TextView bmiInfo=text(p.bmi()>0?String.format(Locale.ROOT,"BMI: %.1f",p.bmi()):"BMI: vul lengte en gewicht in",14,true,GREEN); box.addView(bmiInfo);
+        Button bmiButton=secondary("BMI berekenen"); bmiButton.setOnClickListener(v->{try{double hc=Double.parseDouble(height.getText().toString().replace(',','.'));double wk=Double.parseDouble(weight.getText().toString().replace(',','.'));double b=wk/Math.pow(hc/100.0,2);bmiInfo.setText(String.format(Locale.ROOT,"BMI: %.1f",b));}catch(Exception e){bmiInfo.setText("BMI: controleer lengte en gewicht");}}); box.addView(bmiButton);
+        LinearLayout nutrientCard=card(GREEN_LIGHT); nutrientCard.addView(text("Persoonlijke voedingsrichtwaarden",14,true,INK)); nutrientCard.addView(text(p.nutritionTargetsDetailed(),12,false,MUTED)); box.addView(nutrientCard);
+
+        box.addView(text("Medische/voedingsaandacht",16,true,INK));''')
+
+m=m.replace('''        CheckBox muscle=profileCheck("Spiermassa / extra eiwitaandacht",p.muscle);box.addView(muscle);
+
+        box.addView(text("Aanwezigheid • Week A = oneven, Week B = even",16,true,INK));''','''        CheckBox muscle=profileCheck("Spiermassa / extra eiwitaandacht",p.muscle);box.addView(muscle);
+
+        box.addView(text("Allergieën / intoleranties",16,true,INK));
+        String[] allergyNames={"Noten/pinda","Lactose/melk","Gluten","Schaaldieren","Vis","Ei","Soja","Vlees","Anders"};
+        Map<String,CheckBox> allergyChecks=new LinkedHashMap<>();
+        for(String an:allergyNames){CheckBox cb=profileCheck(an,p.allergies.contains(an));allergyChecks.put(an,cb);box.addView(cb);}
+        EditText allergyOther=input("Andere allergie / intolerantie",p.allergyOther); allergyOther.setVisibility(allergyChecks.get("Anders").isChecked()?View.VISIBLE:View.GONE); box.addView(allergyOther);
+        allergyChecks.get("Anders").setOnCheckedChangeListener((b,c)->allergyOther.setVisibility(c?View.VISIBLE:View.GONE));
+        box.addView(text("Toepassing",14,true,INK));
+        RadioGroup scopeGroup=new RadioGroup(this); scopeGroup.setOrientation(RadioGroup.HORIZONTAL);
+        RadioButton personal=new RadioButton(this); personal.setText("Alleen persoonlijk"); personal.setId(View.generateViewId());
+        RadioButton family=new RadioButton(this); family.setText("Hele gezin"); family.setId(View.generateViewId());
+        scopeGroup.addView(personal,new RadioGroup.LayoutParams(0,-2,1));scopeGroup.addView(family,new RadioGroup.LayoutParams(0,-2,1));
+        if("Hele gezin".equals(p.allergyScope)) family.setChecked(true); else personal.setChecked(true); box.addView(scopeGroup);
+
+        box.addView(text("Aanwezigheid • Week A = oneven, Week B = even",16,true,INK));''')
+
+m=m.replace('''                try{p.age=Integer.parseInt(age.getText().toString());}catch(Exception ignored){}
+                p.menopause=menopause.isChecked();p.skin=skin.isChecked();p.heart=heart.isChecked();p.glucose=glucose.isChecked();p.bloodPressure=bp.isChecked();p.bone=bone.isChecked();p.muscle=muscle.isChecked();''','''                try{p.age=Integer.parseInt(age.getText().toString());}catch(Exception ignored){}
+                try{p.heightCm=Double.parseDouble(height.getText().toString().replace(',','.'));}catch(Exception ignored){}
+                try{p.weightKg=Double.parseDouble(weight.getText().toString().replace(',','.'));}catch(Exception ignored){}
+                p.activity=String.valueOf(activity.getSelectedItem());
+                p.menopause=menopause.isChecked();p.skin=skin.isChecked();p.heart=heart.isChecked();p.glucose=glucose.isChecked();p.bloodPressure=bp.isChecked();p.bone=bone.isChecked();p.muscle=muscle.isChecked();
+                p.allergies.clear(); for(Map.Entry<String,CheckBox> ae:allergyChecks.entrySet()) if(ae.getValue().isChecked()) p.allergies.add(ae.getKey());
+                p.allergyOther=allergyChecks.get("Anders").isChecked()?allergyOther.getText().toString().trim():"";
+                p.allergyScope=family.isChecked()?"Hele gezin":"Persoonlijk";''')
+
+// Calorie controls in settings.
+m=m.replace('''        EditText cook=input("Maximale kooktijd (minuten)",String.valueOf(prefs.getInt("cook",35)));
+        cook.setInputType(2); content.addView(cook);
+        Button save=primary("Opslaan");''','''        EditText cook=input("Maximale kooktijd (minuten)",String.valueOf(prefs.getInt("cook",35)));
+        cook.setInputType(2); content.addView(cook);
+        content.addView(section("Calorieën"));
+        CheckBox showCalories=new CheckBox(this); showCalories.setText("Aantal calorieën weergeven?"); showCalories.setChecked(prefs.getBoolean("show_calories",false)); showCalories.setTextColor(INK); content.addView(showCalories);
+        Spinner maxBreakfast=numberSpinner(0,1200,100,prefs.getInt("max_cal_breakfast",0)); content.addView(labeledSpinner("Max. kcal ontbijt (0 = geen limiet)",maxBreakfast));
+        Spinner maxLunch=numberSpinner(0,1200,100,prefs.getInt("max_cal_lunch",0)); content.addView(labeledSpinner("Max. kcal lunch (0 = geen limiet)",maxLunch));
+        Spinner maxDinner=numberSpinner(0,1200,100,prefs.getInt("max_cal_dinner",0)); content.addView(labeledSpinner("Max. kcal avondeten (0 = geen limiet)",maxDinner));
+        Spinner maxDaily=numberSpinner(0,4000,200,prefs.getInt("max_cal_daily",0)); content.addView(labeledSpinner("Max. kcal totaal per dag (0 = geen limiet)",maxDaily));
+        content.addView(text("Calorieën zijn schattingen op basis van de receptingrediënten. Voor ontbijt/lunch controleert MT Food de vaste maaltijd; voor avondeten stuurt de limiet de receptselectie.",12,false,MUTED));
+        Button save=primary("Opslaan");''')
+
+m=m.replace('''.putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins).apply();''','''.putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins)
+                    .putBoolean("show_calories",showCalories.isChecked())
+                    .putInt("max_cal_breakfast",spinnerInt(maxBreakfast)).putInt("max_cal_lunch",spinnerInt(maxLunch))
+                    .putInt("max_cal_dinner",spinnerInt(maxDinner)).putInt("max_cal_daily",spinnerInt(maxDaily)).apply();''')
+
+// Adapt fixed breakfast/lunch display for whole-family allergies.
+m=m.replace('''        String breakfast=prefs.getString("breakfast","yoghurt / kwark, havermout, blauwe bessen");
+        String lunch=prefs.getString("lunch","volkoren brood, eieren, hummus, komkommer");''','''        String breakfast=adaptFixedMealForFamily(prefs.getString("breakfast","yoghurt / kwark, havermout, blauwe bessen"));
+        String lunch=adaptFixedMealForFamily(prefs.getString("lunch","volkoren brood, eieren, hummus, komkommer"));''')
+
+// Show meal calories and daily adult total on week screen.
+m=m.replace('''        c.addView(mealLine("🥪","Lunch",lunchCount,lunch));
+
+        LinearLayout dinner = new LinearLayout(this);''','''        c.addView(mealLine("🥪","Lunch",lunchCount,lunch));
+        if(prefs.getBoolean("show_calories",false)){
+            int dayCal=NutritionEstimator.estimateTextMeal(breakfast,true)+NutritionEstimator.estimateTextMeal(lunch,false)+NutritionEstimator.estimateRecipeCalories(m.ingredients);
+            c.addView(text("≈ "+dayCal+" kcal totaal • volwassen portie",12,true,GREEN));
+        }
+
+        LinearLayout dinner = new LinearLayout(this);''')
+
+m=m.replace('''        labels.addView(text(label+(count>0?"  •  "+count+" personen":"  •  niet nodig"),12,true,count>0?GREEN:MUTED));''','''        int cal=label.equals("Ontbijt")?NutritionEstimator.estimateTextMeal(items,true):NutritionEstimator.estimateTextMeal(items,false);
+        String calText=prefs.getBoolean("show_calories",false)?"  •  ≈"+cal+" kcal p.p.":"";
+        labels.addView(text(label+(count>0?"  •  "+count+" personen":"  •  niet nodig")+calText,12,true,count>0?GREEN:MUTED));''')
+
+m=m.replace('''        hero.addView(chip(m.category + "   ·   " + m.minutes + " min"));''','''        hero.addView(chip(m.category + "   ·   " + m.minutes + " min"));
+        if(prefs.getBoolean("show_calories",false)) hero.addView(chip("≈ "+NutritionEstimator.estimateRecipeCalories(m.ingredients)+" kcal per volwassen portie"));''')
+
+// Allergy-adjust ingredient amounts in recipe view.
+m=m.replace('''            TextView a=text(ing.amount,14,false,MUTED);''','''            TextView a=text(adjustedAmountForAllergies(m,ing),14,false,MUTED);''')
+
+m=m.replace('''        content.addView(text("◦ = meestal voorraadartikel; alleen kopen als het op is.",12,false,MUTED));
+        content.addView(section("Bereiding"));''','''        content.addView(text("◦ = meestal voorraadartikel; alleen kopen als het op is.",12,false,MUTED));
+        String allergyNotes=personalAllergyNotes(m);
+        if(!allergyNotes.isEmpty()){
+            content.addView(section("Persoonlijke allergie-aanpassingen"));
+            LinearLayout ac=card(Color.rgb(255,247,224)); ac.addView(text(allergyNotes,13,false,INK)); content.addView(ac);
+        }
+        content.addView(section("Bereiding"));''')
+
+// Grocery amounts and substitutes for personal allergies.
+m=m.replace('''                if(!ing.pantry || !pantry.contains(ing.name.toLowerCase())) all.putIfAbsent(ing.name,ing.amount);''','''                if(!ing.pantry || !pantry.contains(ing.name.toLowerCase())) all.putIfAbsent(ing.name,adjustedAmountForAllergies(m,ing));''')
+m=m.replace('''            for(PlannerEngine.Ingredient ing:m.ingredients) {
+                if(!ing.pantry || !pantry.contains(ing.name.toLowerCase())) all.putIfAbsent(ing.name,adjustedAmountForAllergies(m,ing));
+            }
+        }''','''            for(PlannerEngine.Ingredient ing:m.ingredients) {
+                if(!ing.pantry || !pantry.contains(ing.name.toLowerCase())) all.putIfAbsent(ing.name,adjustedAmountForAllergies(m,ing));
+            }
+            for(Map.Entry<String,String> sub:personalSubstitutes(m).entrySet()) all.putIfAbsent(sub.getKey(),sub.getValue());
+        }''')
+
+// Family allergies become hard planner bans; calorie cap combines dinner and daily total.
+m=m.replace('''        int max=prefs.getInt("cook",35);
+        return planner.makeWeek(currentMonday,banned,max);''','''        banned.addAll(household.familyAllergyBans());
+        int max=prefs.getInt("cook",35);
+        int dinnerCap=prefs.getInt("max_cal_dinner",0);
+        int dailyCap=prefs.getInt("max_cal_daily",0);
+        if(dailyCap>0){
+            int fixed=NutritionEstimator.estimateTextMeal(adaptFixedMealForFamily(prefs.getString("breakfast","")),true)+NutritionEstimator.estimateTextMeal(adaptFixedMealForFamily(prefs.getString("lunch","")),false);
+            int remain=dailyCap-fixed;
+            if(remain>0 && (dinnerCap==0 || remain<dinnerCap)) dinnerCap=remain;
+        }
+        planner.setDinnerCalorieCap(dinnerCap);
+        return planner.makeWeek(currentMonday,banned,max);''')
+
+// Helper methods before profileEmoji.
+m=m.replace('''    private String profileEmoji(HouseholdManager.Person p){''','''    private Spinner numberSpinner(int min,int max,int step,int selected){
+        Spinner s=new Spinner(this); List<String> vals=new ArrayList<>(); for(int x=min;x<=max;x+=step) vals.add(String.valueOf(x));
+        s.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,vals));
+        int idx=Math.max(0,Math.min(vals.size()-1,(selected-min)/step)); s.setSelection(idx); return s;
+    }
+    private View labeledSpinner(String label,Spinner s){LinearLayout b=card(CARD);b.addView(text(label,13,true,INK));b.addView(s);return b;}
+    private int spinnerInt(Spinner s){try{return Integer.parseInt(String.valueOf(s.getSelectedItem()));}catch(Exception e){return 0;}}
+
+    private String adaptFixedMealForFamily(String raw){
+        if(raw==null)return ""; Set<String> bans=household.familyAllergyBans(); List<String> out=new ArrayList<>();
+        for(String part:raw.split(",")){String item=part.trim(); if(item.isEmpty())continue; String low=item.toLowerCase(Locale.ROOT); boolean blocked=false; String hit="";
+            for(String b:bans) if(low.contains(b.toLowerCase(Locale.ROOT))){blocked=true;hit=b.toLowerCase(Locale.ROOT);break;}
+            if(!blocked){out.add(item);continue;}
+            if(hit.contains("yogh")||hit.contains("melk")||hit.contains("kwark")) out.add("lactosevrije "+item);
+            else if(hit.contains("brood")||hit.contains("pasta")||hit.contains("wrap")) out.add("glutenvrije "+item);
+            else if(hit.contains("noten")||hit.contains("pinda")) out.add("zadenmix");
+        }
+        return android.text.TextUtils.join(", ",out);
+    }
+
+    private boolean personConflicts(HouseholdManager.Person p,String ingredient){
+        String n=ingredient.toLowerCase(Locale.ROOT);
+        for(String a:p.allergies){String x=a.toLowerCase(Locale.ROOT);
+            if((x.contains("noten")||x.contains("pinda")) && (n.contains("noten")||n.contains("pinda")||n.contains("pesto"))) return true;
+            if((x.contains("lactose")||x.contains("melk")) && (n.contains("melk")||n.contains("yogh")||n.contains("kwark")||n.contains("kaas")||n.contains("room")||n.contains("feta")||n.contains("mozzarella")||n.contains("parmeza"))) return true;
+            if(x.contains("gluten") && (n.contains("pasta")||n.contains("brood")||n.contains("wrap")||n.contains("couscous")||n.contains("bulgur")||n.contains("gnocchi"))) return true;
+            if(x.contains("schaal") && (n.contains("garna")||n.contains("krab")||n.contains("kreeft")||n.contains("schaaldier"))) return true;
+            if(x.equals("vis") && (n.contains("zalm")||n.contains("kabeljauw")||n.contains("vis"))) return true;
+            if(x.equals("ei") && (n.equals("ei")||n.contains("eieren"))) return true;
+            if(x.contains("soja") && (n.contains("soja")||n.contains("tofu"))) return true;
+            if(x.contains("vlees") && (n.contains("kip")||n.contains("rund")||n.contains("gehakt")||n.contains("eend")||n.contains("varken")||n.contains("lam")||n.contains("vlees"))) return true;
+        }
+        return p.allergyOther!=null&&!p.allergyOther.trim().isEmpty()&&n.contains(p.allergyOther.trim().toLowerCase(Locale.ROOT));
+    }
+
+    private int personalConflictCount(PlannerEngine.Meal meal,PlannerEngine.Ingredient ing){int c=0;for(HouseholdManager.Person p:household.personalAllergyPeople()) if(p.schedule[((meal.date.get(WeekFields.ISO.weekOfWeekBasedYear())%2==0)?7:0)+meal.date.getDayOfWeek().getValue()-1][HouseholdManager.DINNER]&&personConflicts(p,ing.name))c++;return c;}
+    private String adjustedAmountForAllergies(PlannerEngine.Meal meal,PlannerEngine.Ingredient ing){int total=household.count(meal.date,HouseholdManager.DINNER),conf=personalConflictCount(meal,ing);if(conf<=0)return ing.amount;int normal=Math.max(0,total-conf);return ing.amount+" × "+normal+" + alternatief × "+conf;}
+
+    private String personalAllergyNotes(PlannerEngine.Meal meal){
+        List<String> notes=new ArrayList<>();
+        for(HouseholdManager.Person p:household.personalAllergyPeople()){
+            List<String> conflicts=new ArrayList<>(); for(PlannerEngine.Ingredient ing:meal.ingredients) if(personConflicts(p,ing.name)) conflicts.add(ing.name);
+            if(conflicts.isEmpty())continue; String joined=android.text.TextUtils.join(", ",conflicts).toLowerCase(Locale.ROOT); String advice;
+            if(joined.contains("noten")||joined.contains("pinda")||joined.contains("pesto")) advice="bereid de noten/pinda-garnering apart en zet los op tafel; voeg die niet toe aan de portie van "+p.name+".";
+            else if(joined.contains("kip")||joined.contains("rund")||joined.contains("gehakt")||joined.contains("vlees")||joined.contains("eend")||joined.contains("lam")) advice="houd het vlees volledig apart en bereid voor "+p.name+" één aparte portie vis of een passende vegetarische eiwitbron.";
+            else if(joined.contains("melk")||joined.contains("yogh")||joined.contains("kaas")||joined.contains("room")||joined.contains("feta")||joined.contains("mozzarella")) advice="houd de zuivelcomponent apart en gebruik voor "+p.name+" een lactose-/melkvrije variant.";
+            else if(joined.contains("pasta")||joined.contains("brood")||joined.contains("wrap")||joined.contains("couscous")||joined.contains("bulgur")||joined.contains("gnocchi")) advice="bereid voor "+p.name+" een aparte glutenvrije portie en gebruik schoon keukengerei om kruiscontact te beperken.";
+            else advice="bereid voor "+p.name+" een afzonderlijke veilige portie zonder "+android.text.TextUtils.join(", ",conflicts)+".";
+            notes.add("• "+p.name+": "+advice);
+        }
+        return android.text.TextUtils.join("\\n",notes);
+    }
+
+    private Map<String,String> personalSubstitutes(PlannerEngine.Meal meal){
+        Map<String,String> out=new LinkedHashMap<>();
+        for(HouseholdManager.Person p:household.personalAllergyPeople()) for(PlannerEngine.Ingredient ing:meal.ingredients) if(personConflicts(p,ing.name)){
+            String n=ing.name.toLowerCase(Locale.ROOT);
+            if(n.contains("kip")||n.contains("rund")||n.contains("gehakt")||n.contains("eend")||n.contains("varken")||n.contains("lam")||n.contains("vlees")) out.put("visfilet of vegetarische eiwitbron","1 portie voor "+p.name);
+            else if(n.contains("melk")||n.contains("yogh")||n.contains("kwark")||n.contains("kaas")||n.contains("room")||n.contains("feta")||n.contains("mozzarella")) out.put("lactose-/melkvrije variant van "+ing.name,"1 portie voor "+p.name);
+            else if(n.contains("pasta")||n.contains("brood")||n.contains("wrap")||n.contains("couscous")||n.contains("bulgur")||n.contains("gnocchi")) out.put("glutenvrije variant van "+ing.name,"1 portie voor "+p.name);
+            else if(!(n.contains("noten")||n.contains("pinda")||n.contains("pesto"))) out.put("veilig alternatief voor "+ing.name,"1 portie voor "+p.name);
+        }
+        return out;
+    }
+
+    private String profileEmoji(HouseholdManager.Person p){''')
+
+if(!m.contains('Aantal calorieën weergeven?') || !m.contains('Allergieën / intoleranties') || !m.contains('personalAllergyNotes') || !m.contains('max_cal_daily')) throw new GradleException('v3.2 main UI patch failed')
+mainFile.write(m,'UTF-8')

@@ -1,0 +1,24 @@
+// MT Food v3.10: show dinner kcal in the orange dinner header and add breathing room before the day total.
+def ahProject=file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainFile=file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!mainFile.exists()) throw new GradleException('v3.10 MainActivity missing')
+def m=mainFile.getText('UTF-8')
+
+// Dinner header: Avondeten • N personen • ≈xxx kcal p.p. (only when dinner is active and calorie display is enabled).
+def oldHeader='''        labels.addView(text("Avondeten" + (dinnerCount>0 ? "  •  "+dinnerCount+" personen" : "  •  niet nodig"), 12, true, ORANGE));'''
+def newHeader='''        String dinnerCalText=(dinnerCount>0 && prefs.getBoolean("show_calories",false))
+                ? "  •  ≈"+NutritionEstimator.estimateRecipeCalories(m.ingredients)+" kcal p.p." : "";
+        labels.addView(text("Avondeten" + (dinnerCount>0 ? "  •  "+dinnerCount+" personen" : "  •  niet nodig") + dinnerCalText, 12, true, ORANGE));'''
+if(m.contains(oldHeader)) m=m.replace(oldHeader,newHeader)
+else if(!m.contains('String dinnerCalText=')) throw new GradleException('v3.10 dinner header marker missing')
+
+// Add a visual blank line before the total and make the total slightly less dominant.
+def totalOld='''            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,true,GREEN));'''
+def totalNew='''            c.addView(space(dp(10)));
+            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,false,GREEN));'''
+if(m.contains(totalOld)) m=m.replace(totalOld,totalNew)
+else if(!m.contains('c.addView(space(dp(10)));') || !m.contains('Dagtotaal ≈')) throw new GradleException('v3.10 day total marker missing')
+
+if(!m.contains('String dinnerCalText=') || !m.contains('kcal p.p.') || !m.contains('c.addView(space(dp(10)));'))
+    throw new GradleException('v3.10 UI validation failed')
+mainFile.write(m,'UTF-8')

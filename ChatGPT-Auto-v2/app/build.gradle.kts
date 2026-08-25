@@ -11,8 +11,8 @@ android {
         applicationId = "nl.chatgptauto.app"
         minSdk = 28
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.3.2"
+        versionCode = 6
+        versionName = "0.3.3"
     }
 
     compileOptions {

@@ -20,12 +20,17 @@
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="16dp" android:text="Stem" android:textStyle="bold" />
         <Spinner android:id="@+id/voice" android:layout_width="match_parent" android:layout_height="wrap_content" />
+        <Button android:id="@+id/mediaAccess" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="20dp" android:text="Mediatoegang voor Spotify / Roon ARC" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Schakel ChatGPT Auto in bij Meldings-/mediatoegang. De app gebruikt dit uitsluitend om actieve mediasessies te bedienen." />
         <Button android:id="@+id/save" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="20dp" android:text="Instellingen opslaan" />
         <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="16dp" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Werking: open ChatGPT Auto in de auto, tik Start, en praat daarna doorlopend. Stilte beëindigt een beurt automatisch. Je kunt ChatGPT tijdens het spreken onderbreken. Tik Stop om de sessie te beëindigen en andere media weer volledig vrij te geven." />
+            android:text="Voorbeelden: ‘Navigeer naar Damrak 1 Amsterdam’, ‘Bel Gwendolien’, ‘Volgende nummer op Spotify’, ‘Pauzeer Roon ARC’, of ‘Speel Miles Davis op Spotify’. Voor bellen zijn contacten- en belrechten nodig." />
     </LinearLayout>
 </ScrollView>

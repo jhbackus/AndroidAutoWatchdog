@@ -1,0 +1,98 @@
+// MT Food v2.9: strongly diversify cuisines across a newly generated week.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!plannerFile.exists()) throw new GradleException('v2.9: generated PlannerEngine not found')
+
+def p=plannerFile.getText('UTF-8')
+
+// Track cuisines already selected in the current week.
+p=p.replace('''        Map<String,Integer> meatCounts=new HashMap<>();
+        int fishCount=0;''','''        Map<String,Integer> meatCounts=new HashMap<>();
+        int fishCount=0;
+        Set<String> usedCuisines=new LinkedHashSet<>();''')
+
+// In the main selection loop, do not reuse a cuisine while another feasible cuisine is available.
+p=p.replace('''                if(isFishRecipe(r) && fishCount>=2) continue;
+                String mk=meatKey(r);
+                if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+                double s=score(r,target,diet,nutritionFlags,favourites,usedProteins);''','''                if(isFishRecipe(r) && fishCount>=2) continue;
+                String mk=meatKey(r);
+                if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+                String ck=cuisineKey(r);
+                if(ck!=null && usedCuisines.contains(ck) && hasUnusedCuisineCandidate(allowed,usedIds,usedCuisines,fishCount,meatCounts)) continue;
+                double s=score(r,target,diet,nutritionFlags,favourites,usedProteins);''')
+
+// Apply the same rule to the fallback candidate loop.
+p=p.replace('''                    if(isFishRecipe(r) && fishCount>=2) continue;
+                    String mk=meatKey(r);
+                    if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+                    double s=score(r,target,diet,nutritionFlags,favourites,usedProteins)+rnd.nextDouble();''','''                    if(isFishRecipe(r) && fishCount>=2) continue;
+                    String mk=meatKey(r);
+                    if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+                    String ck=cuisineKey(r);
+                    if(ck!=null && usedCuisines.contains(ck) && hasUnusedCuisineCandidate(allowed,usedIds,usedCuisines,fishCount,meatCounts)) continue;
+                    double s=score(r,target,diet,nutritionFlags,favourites,usedProteins)+rnd.nextDouble();''')
+
+// Remember the cuisine after each normal selection.
+p=p.replace('''                String mk=meatKey(best); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);''','''                String mk=meatKey(best); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);
+                String ck=cuisineKey(best); if(ck!=null) usedCuisines.add(ck);''')
+
+// Final fill must also prefer a cuisine that has not yet appeared.
+p=p.replace('''                if(isFishRecipe(r) && fishCount>=2) continue;
+                String mk=meatKey(r);
+                if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+                extra=r; break;''','''                if(isFishRecipe(r) && fishCount>=2) continue;
+                String mk=meatKey(r);
+                if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+                String ck=cuisineKey(r);
+                if(ck!=null && usedCuisines.contains(ck) && hasUnusedCuisineCandidate(allowed,usedIds,usedCuisines,fishCount,meatCounts)) continue;
+                extra=r; break;''')
+
+p=p.replace('''            String mk=meatKey(extra); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);''','''            String mk=meatKey(extra); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);
+            String ck=cuisineKey(extra); if(ck!=null) usedCuisines.add(ck);''')
+
+// Add cuisine classification and feasibility helper before isFishRecipe.
+p=p.replace('''    private static boolean isFishRecipe(Recipe r){''','''    private static String cuisineKey(Recipe r){
+        String id=r.id.toLowerCase(Locale.ROOT);
+        String title=r.title.toLowerCase(Locale.ROOT);
+        Set<String> t=r.tags;
+        if(t.contains("indonesian") || id.startsWith("indo-") || title.contains("indones")) return "Indonesisch";
+        if(t.contains("thai") || id.startsWith("thai-") || title.contains("thai") || title.contains("thaise")) return "Thais";
+        if(t.contains("vietnamese") || id.startsWith("vietnam-") || title.contains("vietnam")) return "Vietnamees";
+        if(t.contains("japanese") || id.startsWith("japan-") || title.contains("japan") || title.contains("yakitori") || title.contains("teriyaki")) return "Japans";
+        if(t.contains("korean") || id.startsWith("korean-") || title.contains("korea")) return "Koreaans";
+        if(t.contains("chinese") || id.startsWith("china-") || title.contains("chinese") || title.contains("gemberkip") || title.contains("zoetzure")) return "Chinees";
+        if(id.startsWith("greek-") || title.contains("griek")) return "Grieks";
+        if(id.startsWith("spanish-") || title.contains("spaans")) return "Spaans";
+        if(id.startsWith("french-") || title.contains("frans") || title.contains("ratatouille")) return "Frans";
+        if(id.startsWith("mexican-") || title.contains("mexica") || title.contains("fajita") || title.contains("enchilada") || title.contains("wrap")) return "Mexicaans";
+        if(id.startsWith("indian-") || title.contains("tandoori") || title.contains("madras")) return "Indiaas";
+        if(id.startsWith("moroccan-") || title.contains("marokka")) return "Marokkaans";
+        if(id.startsWith("turkish-") || title.contains("turk") || title.contains("köfte") || title.contains("kofte")) return "Turks";
+        if(id.startsWith("lebanese-") || title.contains("libane") || title.contains("tabouleh") || title.contains("shawarma")) return "Libanees";
+        if(id.startsWith("italian-") || title.contains("pasta") || title.contains("bolognese") || title.contains("pesto") || title.contains("gnocchi") || title.contains("lasagne") || title.contains("lasagna")) return "Italiaans";
+        if(title.contains("curry") && !t.contains("thai")) return "Indiaas";
+        if(t.contains("med")) return "Mediterraan";
+        if(r.category.equals("AVG")) return "Nederlands/Europees";
+        return "Internationaal";
+    }
+
+    private static boolean hasUnusedCuisineCandidate(List<Recipe> allowed,Set<String> usedIds,Set<String> usedCuisines,
+                                                     int fishCount,Map<String,Integer> meatCounts){
+        for(Recipe x:allowed){
+            if(usedIds.contains(x.id)) continue;
+            if(isFishRecipe(x) && fishCount>=2) continue;
+            String mk=meatKey(x);
+            if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+            String ck=cuisineKey(x);
+            if(ck!=null && !usedCuisines.contains(ck)) return true;
+        }
+        return false;
+    }
+
+    private static boolean isFishRecipe(Recipe r){''')
+
+if(!p.contains('usedCuisines') || !p.contains('hasUnusedCuisineCandidate') || !p.contains('private static String cuisineKey')) {
+    throw new GradleException('v2.9 cuisine diversity patch failed')
+}
+plannerFile.write(p,'UTF-8')

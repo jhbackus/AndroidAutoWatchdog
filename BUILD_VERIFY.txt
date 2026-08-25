@@ -1,1 +1,1 @@
-Trigger GitHub Actions build verification for Android Auto Watchdog v1.3.
+CAR AI v0.3.6 launcher icon binary fix commit 5493497dccc4d718cf8936b0d4db8e009caa41bb

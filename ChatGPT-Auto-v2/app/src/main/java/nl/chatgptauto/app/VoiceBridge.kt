@@ -1,10 +1,14 @@
 package nl.chatgptauto.app
 
+import android.content.ComponentName
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.media.session.MediaController
+import android.media.session.MediaSessionManager
+import android.media.session.PlaybackState
 import android.util.Base64
 import androidx.car.app.CarContext
 import androidx.car.app.media.CarAudioRecord
@@ -31,6 +35,8 @@ class VoiceBridge(
     private val finishing = AtomicBoolean(false)
     private val localTools = LocalCarTools(carContext)
     @Volatile private var endAfterResponse = false
+    @Volatile private var resumeInterruptedMedia = true
+    private var interruptedMediaController: MediaController? = null
     private var ws: WebSocket? = null
     private var recorder: CarAudioRecord? = null
     private var player: AudioTrack? = null
@@ -41,6 +47,8 @@ class VoiceBridge(
         if (isRunning) return
         isRunning = true
         finishing.set(false)
+        resumeInterruptedMedia = true
+        interruptedMediaController = null
         scope.launch {
             try {
                 connectAndRun()
@@ -133,6 +141,9 @@ class VoiceBridge(
                 .getOrElse { LocalCarTools.Result(true, "De opdracht kon niet worden uitgevoerd: ${it.message}") }
 
             if (result.handled) {
+                if (changesPlaybackIntent(transcript)) {
+                    resumeInterruptedMedia = false
+                }
                 setState(result.message)
                 endAfterResponse = result.endConversation
                 val response = JSONObject()
@@ -145,6 +156,27 @@ class VoiceBridge(
                 webSocket.send(JSONObject().put("type", "response.create").toString())
             }
         }
+    }
+
+    /**
+     * If the user intentionally changes playback during the ChatGPT conversation, do not
+     * automatically revive whatever was playing before ChatGPT took audio focus.
+     * Next/previous are deliberately excluded: they still refer to the interrupted stream.
+     */
+    private fun changesPlaybackIntent(transcript: String): Boolean {
+        val lower = transcript.lowercase()
+        val namesMediaApp = lower.contains("spotify") || lower.contains("roon arc") ||
+            lower.contains("roonarc")
+        val changesState = lower.contains("pauze") || lower.contains("stop") ||
+            lower.contains("speel ") || lower.startsWith("speel") ||
+            lower.contains("zet spotify") || lower.contains("zet roon") ||
+            lower.contains("start spotify") || lower.contains("start roon") ||
+            lower.contains("open spotify") || lower.contains("open roon") ||
+            lower.contains("hervat") || lower.contains("ga verder")
+        val genericMusicStateChange = lower.contains("pauzeer de muziek") ||
+            lower.contains("pauzeer muziek") || lower.contains("hervat de muziek") ||
+            lower.contains("hervat muziek")
+        return (namesMediaApp && changesState) || genericMusicStateChange
     }
 
     private fun sessionUpdate(): JSONObject {
@@ -181,6 +213,7 @@ class VoiceBridge(
     private suspend fun recordLoop(webSocket: WebSocket) {
         val car = CarAudioRecord.create(carContext)
         recorder = car
+        snapshotPlayingMediaBeforeFocus()
         if (!acquireConversationAudioFocus()) {
             throw IllegalStateException("Android Auto gaf geen audiofocus voor de automicrofoon")
         }
@@ -204,6 +237,19 @@ class VoiceBridge(
         if (isRunning) throw IllegalStateException("De automicrofoon werd door Android Auto gesloten")
     }
 
+    private fun snapshotPlayingMediaBeforeFocus() {
+        interruptedMediaController = runCatching {
+            val manager = carContext.getSystemService(MediaSessionManager::class.java)
+            val listener = ComponentName(carContext, MediaAccessService::class.java)
+            val supportedPackages = setOf("com.spotify.music", "com.roon.onthego")
+            manager?.getActiveSessions(listener)
+                ?.firstOrNull { controller ->
+                    controller.packageName in supportedPackages &&
+                        controller.playbackState?.state == PlaybackState.STATE_PLAYING
+                }
+        }.getOrNull()
+    }
+
     private fun acquireConversationAudioFocus(): Boolean {
         val manager = carContext.getSystemService(AudioManager::class.java) ?: return false
         audioManager = manager
@@ -225,6 +271,19 @@ class VoiceBridge(
         if (manager != null && request != null) runCatching { manager.abandonAudioFocusRequest(request) }
         focusRequest = null
         audioManager = null
+    }
+
+    private fun resumeMediaInterruptedByConversation() {
+        val controller = interruptedMediaController
+        interruptedMediaController = null
+        if (!resumeInterruptedMedia || controller == null) return
+
+        runCatching {
+            val state = controller.playbackState?.state
+            if (state != PlaybackState.STATE_PLAYING) {
+                controller.transportControls.play()
+            }
+        }
     }
 
     @Synchronized
@@ -286,6 +345,7 @@ class VoiceBridge(
         runCatching { player?.pause(); player?.flush(); player?.stop(); player?.release() }
         player = null
         abandonAudioFocus()
+        resumeMediaInterruptedByConversation()
         scope.cancel()
     }
 }

@@ -6,17 +6,18 @@ plugins {
 val brokerTokenForBuild = (System.getenv("CAR_AI_BROKER_TOKEN") ?: "")
     .replace("\\", "\\\\")
     .replace("\"", "\\\"")
+val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 
 android {
     namespace = "nl.chatgptauto.app"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "nl.chatgptauto.app"
+        applicationId = "nl.carai.androidauto"
         minSdk = 28
         targetSdk = 35
-        versionCode = 16
-        versionName = "0.4.5"
+        versionCode = 1000 + ciRunNumber
+        versionName = "0.4.6"
         buildConfigField("String", "BROKER_URL", "\"wss://bilateral.netwerkers.nl/chatgpt-auto\"")
         buildConfigField("String", "BROKER_TOKEN", "\"$brokerTokenForBuild\"")
     }

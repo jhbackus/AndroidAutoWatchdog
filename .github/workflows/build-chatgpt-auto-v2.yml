@@ -31,13 +31,43 @@ jobs:
         working-directory: ChatGPT-Auto-v2
         run: gradle :app:assembleDebug --stacktrace
 
-      - name: Verify APK
+      - name: Verify APK and launcher PNGs
         run: |
-          test -f ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk
-          ls -lh ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk
+          APK='ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk'
+          test -f "$APK"
+          python3 - <<'PY'
+          import struct, zipfile, zlib
+          apk = 'ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk'
+          sig = b'\x89PNG\r\n\x1a\n'
+          with zipfile.ZipFile(apk) as z:
+              icons = sorted(n for n in z.namelist() if 'ic_launcher' in n and n.endswith('.png'))
+              assert len(icons) >= 5, f'Expected launcher PNGs, got {icons}'
+              assert not any('ic_launcher.webp' in n for n in z.namelist()), 'Old WebP launcher still present'
+              for name in icons:
+                  data = z.read(name)
+                  assert data.startswith(sig), f'{name}: invalid PNG signature'
+                  pos = 8
+                  seen_iend = False
+                  while pos + 12 <= len(data):
+                      length = struct.unpack('>I', data[pos:pos+4])[0]
+                      ctype = data[pos+4:pos+8]
+                      end = pos + 12 + length
+                      assert end <= len(data), f'{name}: truncated PNG chunk'
+                      chunk = data[pos+8:pos+8+length]
+                      stored_crc = struct.unpack('>I', data[pos+8+length:pos+12+length])[0]
+                      actual_crc = zlib.crc32(ctype + chunk) & 0xffffffff
+                      assert stored_crc == actual_crc, f'{name}: CRC failure in {ctype!r}'
+                      pos = end
+                      if ctype == b'IEND':
+                          seen_iend = True
+                          break
+                  assert seen_iend, f'{name}: missing IEND'
+              print('Verified launcher PNGs:', icons)
+          PY
+          ls -lh "$APK"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: CAR-AI-v0.4.1-debug
+          name: CAR-AI-v0.4.3-debug
           path: ChatGPT-Auto-v2/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

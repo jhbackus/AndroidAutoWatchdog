@@ -61,6 +61,7 @@ jobs:
           t=q.read_text()
           t=t.replace("if(!m.contains('Aantal calorieën weergeven?') || !m.contains('Allergieën / intoleranties') || !m.contains('personalAllergyNotes') || !m.contains('max_cal_daily')) throw new GradleException('v3.2 main UI patch failed')", "println 'v3.2 UI patch applied; v3.7 performs strict calorie UI validation'")
           q.write_text(t)
+          print('v3.7 calorie settings retry 2')
 
       - name: Build unsigned release APK
         run: gradle assembleRelease --stacktrace

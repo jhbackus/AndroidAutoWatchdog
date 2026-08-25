@@ -9,7 +9,7 @@ import androidx.car.app.model.*
 import androidx.core.graphics.drawable.IconCompat
 
 class VoiceScreen(carContext: CarContext) : Screen(carContext) {
-    private var state = "Start ChatGPT en praat daarna handsfree."
+    private var state = "Start CAR AI en praat daarna handsfree."
     private var bridge: VoiceBridge? = null
 
     override fun onGetTemplate(): Template {
@@ -28,7 +28,7 @@ class VoiceScreen(carContext: CarContext) : Screen(carContext) {
             .build()
 
         return MessageTemplate.Builder(state)
-            .setTitle("ChatGPT Auto")
+            .setTitle("CAR AI")
             .setActionStrip(ActionStrip.Builder().addAction(action).build())
             .build()
     }

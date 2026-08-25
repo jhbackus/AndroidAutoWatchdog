@@ -12,7 +12,9 @@
 
     <application
         android:allowBackup="false"
-        android:label="ChatGPT Auto"
+        android:label="CAR AI"
+        android:icon="@drawable/car_ai_logo"
+        android:roundIcon="@drawable/car_ai_logo"
         android:theme="@style/Theme.ChatGPTAuto">
 
         <activity
@@ -35,7 +37,7 @@
 
         <service
             android:name=".MediaAccessService"
-            android:label="ChatGPT Auto mediatoegang"
+            android:label="CAR AI mediatoegang"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">
             <intent-filter>

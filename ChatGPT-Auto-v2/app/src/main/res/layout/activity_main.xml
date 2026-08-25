@@ -5,7 +5,7 @@
         android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical" android:padding="24dp">
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="ChatGPT Auto" android:textSize="28sp" android:textStyle="bold" />
+            android:text="CAR AI" android:textSize="28sp" android:textStyle="bold" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="Handsfree Android Auto testbuild. De OpenAI API-key blijft op je eigen broker/server en wordt niet in deze app opgeslagen." />
@@ -24,7 +24,7 @@
             android:layout_marginTop="20dp" android:text="Mediatoegang voor Spotify / Roon ARC" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Schakel ChatGPT Auto in bij Meldings-/mediatoegang. De app gebruikt dit uitsluitend om actieve mediasessies te bedienen." />
+            android:text="Schakel CAR AI in bij Meldings-/mediatoegang. De app gebruikt dit uitsluitend om actieve mediasessies te bedienen." />
         <Button android:id="@+id/save" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="20dp" android:text="Instellingen opslaan" />
         <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"

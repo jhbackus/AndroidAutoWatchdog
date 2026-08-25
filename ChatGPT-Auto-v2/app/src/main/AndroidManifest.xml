@@ -13,13 +13,13 @@
     <application
         android:allowBackup="false"
         android:label="CAR AI"
-        android:icon="@drawable/car_ai_logo"
-        android:roundIcon="@drawable/car_ai_logo"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/Theme.ChatGPTAuto">
 
         <activity
             android:name=".MainActivity"
-            android:icon="@drawable/car_ai_logo"
+            android:icon="@mipmap/ic_launcher"
             android:label="CAR AI"
             android:exported="true">
             <intent-filter>
@@ -30,7 +30,7 @@
 
         <service
             android:name=".ChatGptCarAppService"
-            android:icon="@drawable/car_ai_logo"
+            android:icon="@mipmap/ic_launcher"
             android:label="CAR AI"
             android:exported="true">
             <intent-filter>
@@ -41,7 +41,7 @@
 
         <service
             android:name=".MediaAccessService"
-            android:icon="@drawable/car_ai_logo"
+            android:icon="@mipmap/ic_launcher"
             android:label="CAR AI mediatoegang"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="true">

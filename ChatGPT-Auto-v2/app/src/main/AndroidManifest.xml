@@ -28,7 +28,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Regular Android Auto media discovery entry point. -->
         <service
             android:name=".CarAiMediaBrowserService"
             android:icon="@mipmap/ic_launcher"
@@ -36,18 +35,6 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />
-            </intent-filter>
-        </service>
-
-        <!-- Existing Car App Library voice path retained for microphone experiments. -->
-        <service
-            android:name=".ChatGptCarAppService"
-            android:icon="@mipmap/ic_launcher"
-            android:label="CAR AI"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="androidx.car.app.CarAppService" />
-                <category android:name="androidx.car.app.category.MEDIA" />
             </intent-filter>
         </service>
 
@@ -65,8 +52,5 @@
         <meta-data
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
-        <meta-data
-            android:name="androidx.car.app.minCarApiLevel"
-            android:value="5" />
     </application>
 </manifest>

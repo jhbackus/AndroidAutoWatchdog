@@ -1,0 +1,38 @@
+// MT Food v3.8: keep calorie settings persistence scoped to the main Settings screen.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!mainFile.exists()) throw new GradleException('v3.8: generated MainActivity not found')
+
+def m=mainFile.getText('UTF-8')
+
+// A previous compatibility patch could attach the calorie persistence chain to the
+// cooking-time schedule editor. Remove it there; that dialog only owns cook_day_* values.
+int scheduleStart=m.indexOf('    private void showCookingTimeSchedule(){')
+if(scheduleStart>=0){
+    int scheduleEnd=m.indexOf('\n    private String profileEmoji',scheduleStart)
+    if(scheduleEnd<0) scheduleEnd=m.length()
+    String schedule=m.substring(scheduleStart,scheduleEnd)
+    schedule=schedule.replace(''' ed.putBoolean("show_calories",showCalories.isChecked())
+                    .putInt("max_cal_breakfast",spinnerInt(maxBreakfast))
+                    .putInt("max_cal_lunch",spinnerInt(maxLunch))
+                    .putInt("max_cal_dinner",spinnerInt(maxDinner))
+                    .putInt("max_cal_daily",spinnerInt(maxDaily)).apply();''',''' ed.apply();''')
+    m=m.substring(0,scheduleStart)+schedule+m.substring(scheduleEnd)
+}
+
+// Validate the visible controls and that their persistence exists somewhere in showSettings.
+int settingsStart=m.indexOf('    private void showSettings() {')
+int settingsSaveEnd=m.indexOf('        content.addView(save);',settingsStart)
+if(settingsStart<0 || settingsSaveEnd<0) throw new GradleException('v3.8: showSettings save block not found')
+String settings=m.substring(settingsStart,settingsSaveEnd)
+for(String required : ['Aantal calorieën weergeven?','max_cal_breakfast','max_cal_lunch','max_cal_dinner','max_cal_daily','.putBoolean("show_calories",showCalories.isChecked())']){
+    if(!settings.contains(required)) throw new GradleException('v3.8: calorie setting not present in showSettings: '+required)
+}
+if(scheduleStart>=0){
+    int s2=m.indexOf('    private void showCookingTimeSchedule(){')
+    int e2=m.indexOf('\n    private String profileEmoji',s2)
+    if(e2<0) e2=m.length()
+    String scheduleCheck=m.substring(s2,e2)
+    if(scheduleCheck.contains('showCalories') || scheduleCheck.contains('max_cal_breakfast')) throw new GradleException('v3.8: calorie variables leaked into cooking schedule scope')
+}
+mainFile.write(m,'UTF-8')

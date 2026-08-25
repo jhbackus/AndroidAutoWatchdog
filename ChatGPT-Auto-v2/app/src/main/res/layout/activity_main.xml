@@ -29,6 +29,12 @@
             android:layout_marginTop="20dp" android:text="Instellingen opslaan" />
         <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="16dp" />
+
+        <Button android:id="@+id/runDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="24dp" android:text="Android Auto diagnose uitvoeren" />
+        <TextView android:id="@+id/diagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="12dp" android:textIsSelectable="true" />
+
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:text="Voorbeelden: ‘Navigeer naar Damrak 1 Amsterdam’, ‘Bel Gwendolien’, ‘Volgende nummer op Spotify’, ‘Pauzeer Roon ARC’, of ‘Speel Miles Davis op Spotify’. Voor bellen zijn contacten- en belrechten nodig." />

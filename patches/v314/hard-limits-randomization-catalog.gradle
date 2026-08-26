@@ -38,7 +38,7 @@ String catalog = '''    private void seedV314CuisineCatalog(){
                 Recipe old=recipes.get(ri);
                 if(old.id.startsWith(row[1]+"-auto-")){
                     recipes.set(ri,new Recipe(old.id,names[renamed%names.length],old.emoji,old.category,old.minutes,
-                            old.description,android.text.TextUtils.join(" ",old.tags),old.ingredients,old.steps.toArray(new String[0])));
+                            old.description,String.join(" ",old.tags),old.ingredients,old.steps.toArray(new String[0])));
                     renamed++;
                 }
             }

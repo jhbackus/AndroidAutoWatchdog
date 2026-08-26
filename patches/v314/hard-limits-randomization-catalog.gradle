@@ -128,7 +128,7 @@ String groceryHelper='''    private void addGroceryIngredientLines(LinkedHashMap
     }
 
 '''
-m=m.replace('    private String hardCappedFixedMeal(String meal,boolean breakfast){',groceryHelper+'    private String hardCappedFixedMeal(String meal,boolean breakfast){')
+m=m.replace('    private String adaptFixedMealForFamily(String raw){',groceryHelper+'    private String adaptFixedMealForFamily(String raw){')
 
 // Enforce fixed-meal caps by substituting a deterministic lower-calorie meal when the configured fixed meal exceeds its cap.
 // Dinner is already hard-filtered by PlannerEngine; the daily cap is converted to remaining dinner budget.

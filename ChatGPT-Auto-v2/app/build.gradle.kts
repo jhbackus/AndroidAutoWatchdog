@@ -26,7 +26,7 @@ android {
         minSdk = 28
         targetSdk = 35
         versionCode = 3000 + ciRunNumber
-        versionName = "0.5.0"
+        versionName = "0.5.1"
         buildConfigField("String", "BROKER_URL", "\"wss://bilateral.netwerkers.nl/chatgpt-auto\"")
         buildConfigField("String", "BROKER_TOKEN", "\"$brokerTokenForBuild\"")
     }
@@ -63,5 +63,5 @@ dependencies {
     implementation("androidx.media3:media3-session:1.11.0")
     implementation("androidx.media3:media3-exoplayer:1.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("org.jetbrains.kotlinx-coroutines-android:1.9.0")
 }

@@ -33,11 +33,20 @@ String catalog = '''    private void seedV314CuisineCatalog(){
         for(String[] row:rows){
             String[] names=row[2].split("\\|",-1);
             if(names.length<26) throw new IllegalStateException("Te weinig v3.14 namen voor "+row[0]);
+            int renamed=0;
+            for(int ri=0;ri<recipes.size();ri++){
+                Recipe old=recipes.get(ri);
+                if(old.id.startsWith(row[1]+"-auto-")){
+                    recipes.set(ri,new Recipe(old.id,names[renamed%names.length],old.emoji,old.category,old.minutes,
+                            old.description,android.text.TextUtils.join(" ",old.tags),old.ingredients,old.steps.toArray(new String[0])));
+                    renamed++;
+                }
+            }
             for(int i=0;i<26;i++){
                 boolean plant=(i%4==0);
                 String protein=plant?"witte bonen":(i%3==0?"kipfilet":(i%3==1?"kabeljauwfilet":"mager rundergehakt"));
                 String tags=row[6]+" vegetables "+(plant?"veg legume protein":protein.contains("kip")?"chicken protein":protein.contains("kabeljauw")?"fish protein":"beef protein");
-                recipes.add(new Recipe(row[1]+"-auth-"+i,names[i],"🍲",i%4==0?"Anders":i%4==1?"AVG":i%4==2?"Rijst":"Pasta",35,
+                recipes.add(new Recipe(row[1]+"-auth-"+i,names[(i+24)%names.length],"🍲",i%4==0?"Anders":i%4==1?"AVG":i%4==2?"Rijst":"Pasta",35,
                     "Authentieke "+row[0].toLowerCase(Locale.ROOT)+" maaltijd met cuisine-specifieke smaakmakers.",tags,
                     L(I(protein,plant?"140 g p.p.":"140 g p.p.",false),I(row[3],"180 g p.p.",false),I(row[4],"160 g p.p.",false),I(row[5],"naar smaak",true)),
                     "Zet alle ingrediënten afgewogen klaar en snijd de groenten gelijkmatig.",

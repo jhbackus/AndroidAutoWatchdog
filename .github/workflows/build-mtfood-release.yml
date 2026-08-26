@@ -2,6 +2,8 @@ name: Build MT Food signed release
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ ah-weekplanner-v03-build ]
   pull_request:
     branches: [ main ]
 

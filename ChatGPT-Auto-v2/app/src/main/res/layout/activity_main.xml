@@ -8,15 +8,15 @@
             android:text="CAR AI" android:textSize="28sp" android:textStyle="bold" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:text="Handsfree Android Auto testbuild. De OpenAI API-key blijft op je eigen broker/server en wordt niet in deze app opgeslagen." />
+            android:text="Handsfree ChatGPT voor Android Auto. Open CAR AI in de auto en tik op Start om via de automicrofoon te praten." />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="20dp" android:text="Realtime broker WebSocket-URL" android:textStyle="bold" />
         <EditText android:id="@+id/brokerUrl" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:hint="wss://jouwdomein.nl/chatgpt-auto" android:inputType="textUri" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="16dp" android:text="Broker-token (optioneel, aanbevolen)" android:textStyle="bold" />
+            android:layout_marginTop="16dp" android:text="Broker-token" android:textStyle="bold" />
         <EditText android:id="@+id/brokerToken" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:hint="Eigen lang willekeurig token" android:inputType="textPassword" />
+            android:hint="Broker-token" android:inputType="textPassword" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="16dp" android:text="Stem" android:textStyle="bold" />
         <Spinner android:id="@+id/voice" android:layout_width="match_parent" android:layout_height="wrap_content" />
@@ -24,19 +24,13 @@
             android:layout_marginTop="20dp" android:text="Mediatoegang voor Spotify / Roon ARC" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Schakel CAR AI in bij Meldings-/mediatoegang. De app gebruikt dit uitsluitend om actieve mediasessies te bedienen." />
+            android:text="Schakel CAR AI in bij Meldings-/mediatoegang zodat actieve Spotify- en Roon ARC-sessies bediend en na een gesprek hervat kunnen worden." />
         <Button android:id="@+id/save" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="20dp" android:text="Instellingen opslaan" />
         <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="16dp" />
-
-        <Button android:id="@+id/runDiagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="24dp" android:text="Android Auto diagnose uitvoeren" />
-        <TextView android:id="@+id/diagnostic" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="12dp" android:textIsSelectable="true" />
-
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:text="Voorbeelden: ‘Navigeer naar Damrak 1 Amsterdam’, ‘Bel Gwendolien’, ‘Volgende nummer op Spotify’, ‘Pauzeer Roon ARC’, of ‘Speel Miles Davis op Spotify’. Voor bellen zijn contacten- en belrechten nodig." />
+            android:text="Voorbeelden: ‘Navigeer naar Damrak 1 Amsterdam’, ‘Bel Gwendolien’, ‘Volgende nummer op Spotify’, ‘Pauzeer Roon ARC’, of stel gewoon een vraag aan ChatGPT." />
     </LinearLayout>
 </ScrollView>

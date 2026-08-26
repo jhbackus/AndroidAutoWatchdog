@@ -7,6 +7,10 @@ on:
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: mt-food-v314-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   actions: read

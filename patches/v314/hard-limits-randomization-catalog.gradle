@@ -75,7 +75,7 @@ p=p.replace('    private boolean allowed(Recipe r,Set<String>banned,int maxMinut
 p=p.replaceAll(/double s=score\(r,target,diet,nutritionFlags,favourites,usedProteins\)(?:\+rnd\.nextDouble\(\)\*14\.0)?;/,'double s=rnd.nextDouble();')
 p=p.replaceAll(/double s=score\(r,target,diet,nutritionFlags,favourites,usedProteins\)\s*;\s*s \+= rnd\.nextDouble\(\)\*14\.0;/,'double s=rnd.nextDouble();')
 
-if(!p.contains('seedV314CuisineCatalog()') || !p.contains('containsHardBan') || !p.contains('dutch-auth-'))
+if(!p.contains('seedV314CuisineCatalog()') || !p.contains('containsHardBan') || !p.contains('row[1]+"-auth-"+i'))
     throw new GradleException('v3.14 planner validation failed')
 plannerFile.write(p,'UTF-8')
 
@@ -90,7 +90,7 @@ m=m.replace('''            String cuisine=cuisines[selected[0]];
             }
             replaceMealWithCuisine(meal,cuisine);''')
 
-// Count only the displayed/order week, never the complete two-week attendance cycle.
+// Count only the displayed/order week, using each date's ISO even/odd attendance schedule.
 m=m.replace('''        int breakfastPortions=household.totalMealPortions(currentMonday,HouseholdManager.BREAKFAST);
         int lunchPortions=household.totalMealPortions(currentMonday,HouseholdManager.LUNCH);''','''        int breakfastPortions=0, lunchPortions=0;
         for(int d=0;d<7;d++){
@@ -98,6 +98,15 @@ m=m.replace('''        int breakfastPortions=household.totalMealPortions(current
             breakfastPortions+=household.count(orderDate,HouseholdManager.BREAKFAST);
             lunchPortions+=household.count(orderDate,HouseholdManager.LUNCH);
         }''')
+
+// Scale every dinner ingredient by the number of people marked present on that exact even/odd-week date.
+m=m.replace('private String adjustedAmountForAllergies(PlannerEngine.Meal meal,PlannerEngine.Ingredient ing){int total=household.count(meal.date,HouseholdManager.DINNER),conf=personalConflictCount(meal,ing);if(conf<=0)return ing.amount;int normal=Math.max(0,total-conf);return ing.amount+" × "+normal+" + alternatief × "+conf;}',
+'''private String adjustedAmountForAllergies(PlannerEngine.Meal meal,PlannerEngine.Ingredient ing){
+        int total=household.count(meal.date,HouseholdManager.DINNER),conf=personalConflictCount(meal,ing);
+        int normal=Math.max(0,total-conf);
+        if(conf<=0) return ing.amount+" × "+total;
+        return ing.amount+" × "+normal+" + alternatief × "+conf;
+    }''')
 
 // Enforce fixed-meal caps by substituting a deterministic lower-calorie meal when the configured fixed meal exceeds its cap.
 // Dinner is already hard-filtered by PlannerEngine; the daily cap is converted to remaining dinner budget.

@@ -3,8 +3,10 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <queries>
         <package android:name="com.spotify.music" />
@@ -34,7 +36,7 @@
             android:name=".CarAiMediaLibraryService"
             android:icon="@mipmap/ic_launcher"
             android:label="CAR AI"
-            android:foregroundServiceType="mediaPlayback"
+            android:foregroundServiceType="mediaPlayback|microphone"
             android:exported="true">
             <intent-filter>
                 <action android:name="androidx.media3.session.MediaLibraryService" />

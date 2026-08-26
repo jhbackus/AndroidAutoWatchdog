@@ -58,8 +58,8 @@ kotlin {
 dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
-    implementation("androidx.car.app:app:1.8.0")
-    implementation("androidx.car.app:app-projected:1.8.0")
+    implementation("androidx.car.app:app:1.7.0")
+    implementation("androidx.car.app:app-projected:1.7.0")
     implementation("androidx.media3:media3-session:1.11.0")
     implementation("androidx.media3:media3-exoplayer:1.11.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

@@ -32,7 +32,7 @@ jobs:
           p=Path('app/build.gradle')
           s=p.read_text()
           s=s.replace('versionCode 15', 'versionCode 44')
-          s=s.replace("versionName '1.5.0'", "versionName '3.13.0'")
+          s=s.replace("versionName '1.5.0'", "versionName '3.14.0'")
           s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v3.14')
           s=s.replace('// MT Food v1.5:', '// MT Food v3.14:')
           s += '\napply from: rootProject.file("patches/v17/duck.gradle")\n'

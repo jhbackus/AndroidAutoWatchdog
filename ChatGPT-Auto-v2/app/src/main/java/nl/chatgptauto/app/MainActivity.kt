@@ -3,6 +3,7 @@ package nl.chatgptauto.app
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.*
@@ -54,7 +55,7 @@ class MainActivity : AppCompatActivity() {
                     .putString("broker_token", token)
                     .putString("voice", voiceIds[voice.selectedItemPosition])
                     .apply()
-                status.text = "Opgeslagen. Open CAR AI in Android Auto en tik op Start."
+                status.text = "Opgeslagen. Open CAR AI in Android Auto en kies Voice assistant."
             }
         }
 
@@ -62,11 +63,15 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
 
-        val needed = arrayOf(
+        val requested = mutableListOf(
             Manifest.permission.RECORD_AUDIO,
             Manifest.permission.READ_CONTACTS,
             Manifest.permission.CALL_PHONE
-        ).filter {
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            requested += Manifest.permission.BLUETOOTH_CONNECT
+        }
+        val needed = requested.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
         if (needed.isNotEmpty()) {

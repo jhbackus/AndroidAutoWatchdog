@@ -104,7 +104,6 @@ String helpers='''    private static boolean bannedContains(Set<String> banned,S
             if(matchedBan==null){ ingredients.add(ing); continue; }
             String substitute=chooseIngredientSubstitute(r,ing,banned);
             if(substitute==null){
-                // Keep it unchanged; allowed(...) will reject the recipe as before.
                 ingredients.add(ing);
                 continue;
             }
@@ -127,18 +126,21 @@ if(!p.contains('private static Recipe adaptRecipeForBans')){
     p=p.substring(0,at)+helpers+p.substring(at)
 }
 
-// Week generation: adapt each recipe first, then run all existing hard filters on the adapted version.
-String oldWeek='''        List<Recipe> allowed=new ArrayList<>();
+// Week generation. v3.4 changed the pool limit to poolMaxMinutes(maxMinutes), so support both forms.
+String oldWeekA='''        List<Recipe> allowed=new ArrayList<>();
         for(Recipe r:recipes) if(allowed(r,banned,maxMinutes,diet)) allowed.add(r);'''
+String oldWeekB='''        List<Recipe> allowed=new ArrayList<>();
+        for(Recipe r:recipes) if(allowed(r,banned,poolMaxMinutes(maxMinutes),diet)) allowed.add(r);'''
 String newWeek='''        List<Recipe> allowed=new ArrayList<>();
         for(Recipe source:recipes){
             Recipe r=adaptRecipeForBans(source,banned);
-            if(allowed(r,banned,maxMinutes,diet)) allowed.add(r);
+            if(allowed(r,banned,poolMaxMinutes(maxMinutes),diet)) allowed.add(r);
         }'''
-if(p.contains(oldWeek)) p=p.replace(oldWeek,newWeek)
+if(p.contains(oldWeekB)) p=p.replace(oldWeekB,newWeek)
+else if(p.contains(oldWeekA)) p=p.replace(oldWeekA,newWeek.replace('poolMaxMinutes(maxMinutes)','maxMinutes'))
 else if(!p.contains('Recipe r=adaptRecipeForBans(source,banned);')) throw new GradleException('v3.12 week allowed-pool marker missing')
 
-// Single-meal replacement: use the same substitution logic so replacing one day behaves identically.
+// Single-meal replacement uses the ordinary maxMinutes limit.
 String oldReplace='''        List<Recipe> allowedRecipes=new ArrayList<>();
         for(Recipe r:recipes) if(allowed(r,banned,maxMinutes,diet)) allowedRecipes.add(r);'''
 String newReplace='''        List<Recipe> allowedRecipes=new ArrayList<>();

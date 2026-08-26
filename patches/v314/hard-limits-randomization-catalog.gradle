@@ -117,6 +117,19 @@ m=m.replace('private String adjustedAmountForAllergies(PlannerEngine.Meal meal,P
         return ing.amount+" × "+normal+" + alternatief × "+conf;
     }''')
 
+// One product per grocery row and per checkbox, even when a recipe stores a compound flavour line.
+m=m.replace('all.putIfAbsent(ing.name,adjustedAmountForAllergies(m,ing));','addGroceryIngredientLines(all,m,ing);')
+String groceryHelper='''    private void addGroceryIngredientLines(LinkedHashMap<String,String> all,PlannerEngine.Meal meal,PlannerEngine.Ingredient ing){
+        String amount=adjustedAmountForAllergies(meal,ing);
+        for(String raw:ing.name.split("\\\\s*,\\\\s*|\\\\s+en\\\\s+")){
+            String product=raw.trim();
+            if(!product.isEmpty()) all.putIfAbsent(product,amount);
+        }
+    }
+
+'''
+m=m.replace('    private String hardCappedFixedMeal(String meal,boolean breakfast){',groceryHelper+'    private String hardCappedFixedMeal(String meal,boolean breakfast){')
+
 // Enforce fixed-meal caps by substituting a deterministic lower-calorie meal when the configured fixed meal exceeds its cap.
 // Dinner is already hard-filtered by PlannerEngine; the daily cap is converted to remaining dinner budget.
 String capHelper='''    private String hardCappedFixedMeal(String meal,boolean breakfast){
@@ -139,6 +152,6 @@ m=m.replace('c.addView(space(dp(18)));\n            c.addView(text("Dagtotaal �
 m=m.replace('c.addView(space(dp(10)));\n            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,false,GREEN));',
             'c.addView(space(dp(28)));\n            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,false,GREEN));')
 
-if(!m.contains('for(int d=0;d<7;d++)') || !m.contains('hardCappedFixedMeal') || !m.contains('space(dp(28))'))
+if(!m.contains('for(int d=0;d<7;d++)') || !m.contains('hardCappedFixedMeal') || !m.contains('space(dp(28))') || !m.contains('addGroceryIngredientLines'))
     throw new GradleException('v3.14 MainActivity validation failed')
 mainFile.write(m,'UTF-8')

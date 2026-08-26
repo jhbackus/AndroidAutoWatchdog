@@ -62,6 +62,7 @@ jobs:
           s += 'apply from: rootProject.file("patches/v311/greek-expansion.gradle")\n'
           s += 'apply from: rootProject.file("patches/v312/contextual-banned-substitution.gradle")\n'
           s += 'apply from: rootProject.file("patches/v313/italian-50-and-spacing.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v313/italian-split-fix.gradle")\n'
           p.write_text(s)
 
           q=Path('patches/v32/calories-allergy-ui.gradle')

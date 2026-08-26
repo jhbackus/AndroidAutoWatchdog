@@ -31,7 +31,7 @@ String catalog = '''    private void seedV314CuisineCatalog(){
             {"Portugees","portuguese","bacalhau à Brás|caldo verde|frango piri-piri|arroz de pato|cataplana de peixe|carne de porco à Alentejana|bacalhau com natas|feijoada à portuguesa|polvo à lagareiro|açorda de marisco|caldeirada de peixe|frango na púcara|ervilhas com ovos|arroz de marisco|pataniscas de bacalhau|jardineira de vitela|favas à portuguesa|peixe assado no forno|bifanas com salada|cozido leve|arroz de polvo|lulas recheadas|sopa da pedra|bacalhau à Gomes de Sá|frango com limão|massada de peixe","aardappelen","spinazie","knoflook, laurier en citroen","balanced med portuguese"}
         };
         for(String[] row:rows){
-            String[] names=row[2].split("\\|",-1);
+            String[] names=row[2].split("\\\\|",-1);
             if(names.length<26) throw new IllegalStateException("Te weinig v3.14 namen voor "+row[0]);
             int renamed=0;
             for(int ri=0;ri<recipes.size();ri++){

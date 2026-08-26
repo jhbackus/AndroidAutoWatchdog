@@ -1,0 +1,133 @@
+// MT Food v3.4: general cooking-time limit plus per-weekday schedule.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!plannerFile.exists() || !mainFile.exists()) throw new GradleException('v3.4: generated sources not found')
+
+def p=plannerFile.getText('UTF-8')
+
+// Store optional Monday..Sunday cooking-time caps for week generation.
+p=p.replace('''    private int variantCounter = 0;''','''    private int variantCounter = 0;
+    private int[] dayMaxMinutes = null;
+    public void setDayMaxMinutes(int[] limits){
+        if(limits==null || limits.length<7){ dayMaxMinutes=null; return; }
+        dayMaxMinutes=Arrays.copyOf(limits,7);
+    }
+    private int poolMaxMinutes(int fallback){
+        int mx=fallback;
+        if(dayMaxMinutes!=null) for(int x:dayMaxMinutes) if(x>mx) mx=x;
+        return mx;
+    }
+    private int slotMaxMinutes(int slot,int fallback){
+        if(dayMaxMinutes!=null && slot>=0 && slot<dayMaxMinutes.length && dayMaxMinutes[slot]>0) return dayMaxMinutes[slot];
+        return fallback;
+    }''')
+
+// Keep recipes up to the longest configured day in the candidate pool.
+p=p.replace('''        for(Recipe r:recipes) if(allowed(r,banned,maxMinutes,diet)) allowed.add(r);''','''        for(Recipe r:recipes) if(allowed(r,banned,poolMaxMinutes(maxMinutes),diet)) allowed.add(r);''')
+
+// Apply the current weekday limit in the main selection loop.
+p=p.replace('''        for(String target:targets){
+            Recipe best=null; double bestScore=-1e9;''','''        for(String target:targets){
+            int slot=chosen.size();
+            int slotMax=slotMaxMinutes(slot,maxMinutes);
+            Recipe best=null; double bestScore=-1e9;''')
+
+p=p.replace('''            for(Recipe r:allowed){
+                if(usedIds.contains(r.id)) continue;''','''            for(Recipe r:allowed){
+                if(usedIds.contains(r.id)) continue;
+                if(slotMax>0 && r.minutes>slotMax) continue;''')
+
+// The fallback loop must obey the same weekday cap.
+p=p.replace('''                for(Recipe r:allowed){
+                    double s=score(r,target,diet,nutritionFlags,favourites,usedProteins)+rnd.nextDouble()*14.0;''','''                for(Recipe r:allowed){
+                    if(slotMax>0 && r.minutes>slotMax) continue;
+                    double s=score(r,target,diet,nutritionFlags,favourites,usedProteins)+rnd.nextDouble()*14.0;''')
+
+// Final fill must also obey the weekday cap.
+p=p.replace('''        while(chosen.size()<7 && !allowed.isEmpty()){
+            Recipe extra=null;''','''        while(chosen.size()<7 && !allowed.isEmpty()){
+            int slot=chosen.size();
+            int slotMax=slotMaxMinutes(slot,maxMinutes);
+            Recipe extra=null;''')
+p=p.replace('''            for(Recipe r:allowed){
+                if(usedIds.contains(r.id)) continue;
+                if(isFishRecipe(r) && fishCount>=2) continue;''','''            for(Recipe r:allowed){
+                if(usedIds.contains(r.id)) continue;
+                if(slotMax>0 && r.minutes>slotMax) continue;
+                if(isFishRecipe(r) && fishCount>=2) continue;''')
+p=p.replace('''                for(Recipe r:allowed){
+                    if(!isFishRecipe(r) && meatKey(r)==null){ extra=r; break; }''','''                for(Recipe r:allowed){
+                    if(slotMax>0 && r.minutes>slotMax) continue;
+                    if(!isFishRecipe(r) && meatKey(r)==null){ extra=r; break; }''')
+
+if(!p.contains('setDayMaxMinutes') || !p.contains('slotMaxMinutes') || !p.contains('poolMaxMinutes')) throw new GradleException('v3.4 planner cooking-time patch failed')
+plannerFile.write(p,'UTF-8')
+
+def m=mainFile.getText('UTF-8')
+
+// Default global value becomes 30 minutes.
+m=m.replace('prefs.getInt("cook",35)','prefs.getInt("cook",30)')
+m=m.replace('String.valueOf(prefs.getInt("cook",35))','String.valueOf(prefs.getInt("cook",30))')
+m=m.replace('int mins=35;','int mins=30;')
+
+// Replace the plain cooking-time field with a row and a per-weekday schedule button.
+def cookOld='''        EditText cook=input("Maximale kooktijd (minuten)",String.valueOf(prefs.getInt("cook",30)));
+        cook.setInputType(2); content.addView(cook);'''
+def cookNew='''        LinearLayout cookRow=new LinearLayout(this); cookRow.setOrientation(LinearLayout.HORIZONTAL); cookRow.setGravity(Gravity.CENTER_VERTICAL);
+        EditText cook=input("Maximale kooktijd (minuten)",String.valueOf(prefs.getInt("cook",30)));
+        cook.setInputType(2); cookRow.addView(cook,new LinearLayout.LayoutParams(0,-2,1));
+        Button cookSchedule=miniButton("Rooster"); cookSchedule.setOnClickListener(v->showCookingTimeSchedule());
+        LinearLayout.LayoutParams cookBtnLp=new LinearLayout.LayoutParams(dp(104),-2); cookBtnLp.setMargins(dp(8),0,0,0); cookRow.addView(cookSchedule,cookBtnLp);
+        content.addView(cookRow);
+        content.addView(text("Standaard 30 min. Het rooster kan per weekdag afwijken, bijvoorbeeld 60 min op zaterdag voor langere oven- of stoofgerechten.",12,false,MUTED));'''
+if(m.contains(cookOld)) m=m.replace(cookOld,cookNew)
+else {
+    m=m.replaceFirst(/(?s)        EditText cook=input\("Maximale kooktijd \(minuten\)",String\.valueOf\(prefs\.getInt\("cook",30\)\)\);\s*cook\.setInputType\(2\);\s*content\.addView\(cook\);/, java.util.regex.Matcher.quoteReplacement(cookNew))
+}
+
+// When generating a week, push Monday..Sunday limits into PlannerEngine.
+m=m.replace('''        int max=prefs.getInt("cook",30);
+        return planner.makeWeek(currentMonday,banned,max);''','''        int max=prefs.getInt("cook",30);
+        int[] dayLimits=new int[7];
+        for(int d=0;d<7;d++) dayLimits[d]=prefs.getInt("cook_day_"+d,max);
+        planner.setDayMaxMinutes(dayLimits);
+        return planner.makeWeek(currentMonday,banned,max);''')
+
+// If v3.2 expanded generateWeek, inject day limits just before makeWeek as a fallback.
+if(!m.contains('planner.setDayMaxMinutes(dayLimits)')){
+    m=m.replace('''        return planner.makeWeek(currentMonday,banned,max);''','''        int[] dayLimits=new int[7];
+        for(int d=0;d<7;d++) dayLimits[d]=prefs.getInt("cook_day_"+d,max);
+        planner.setDayMaxMinutes(dayLimits);
+        return planner.makeWeek(currentMonday,banned,max);''')
+}
+
+// Replacement should use that specific weekday's cap too.
+m=m.replace('''        int maxMin=prefs.getInt("cook",30);''','''        int maxMin=prefs.getInt("cook_day_"+(meal.date.getDayOfWeek().getValue()-1),prefs.getInt("cook",30));''')
+
+// Add schedule dialog before profileEmoji.
+m=m.replace('''    private String profileEmoji(HouseholdManager.Person p){''','''    private void showCookingTimeSchedule(){
+        String[] days={"Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"};
+        int base=prefs.getInt("cook",30);
+        ScrollView sv=new ScrollView(this); LinearLayout box=new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(dp(18),dp(8),dp(18),dp(12)); sv.addView(box);
+        final EditText[] fields=new EditText[7];
+        box.addView(text("Maximale kooktijd per weekdag",16,true,INK));
+        box.addView(text("Een dagwaarde overschrijft de algemene instelling. Gebruik bijvoorbeeld 60 minuten in het weekend om langere ovengerechten toe te laten.",12,false,MUTED));
+        for(int d=0;d<7;d++){
+            LinearLayout row=new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
+            row.addView(text(days[d],14,true,INK),new LinearLayout.LayoutParams(0,-2,1));
+            EditText f=input("min",String.valueOf(prefs.getInt("cook_day_"+d,base))); f.setInputType(2); fields[d]=f;
+            row.addView(f,new LinearLayout.LayoutParams(dp(100),-2)); box.addView(row);
+        }
+        new AlertDialog.Builder(this).setTitle("Kooktijdrooster").setView(sv)
+                .setPositiveButton("Opslaan",(dlg,w)->{
+                    SharedPreferences.Editor ed=prefs.edit();
+                    for(int d=0;d<7;d++){int val=base;try{val=Integer.parseInt(fields[d].getText().toString());}catch(Exception ignored){} if(val<1)val=base; ed.putInt("cook_day_"+d,val);} ed.apply();
+                    currentWeek=generateWeek(); showSettings();
+                }).setNegativeButton("Annuleren",null).show();
+    }
+
+    private String profileEmoji(HouseholdManager.Person p){''')
+
+if(!m.contains('showCookingTimeSchedule') || !m.contains('cook_day_') || !m.contains('miniButton("Rooster")')) throw new GradleException('v3.4 cooking-time UI patch failed')
+mainFile.write(m,'UTF-8')

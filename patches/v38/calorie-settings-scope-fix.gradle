@@ -1,0 +1,88 @@
+// MT Food v3.8: deterministically scope calorie controls and persist them independently.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!mainFile.exists()) throw new GradleException('v3.8: generated MainActivity not found')
+
+def m=mainFile.getText('UTF-8')
+
+int settingsStart=m.indexOf('    private void showSettings() {')
+int settingsEnd=m.indexOf('\n    private ',settingsStart+10)
+if(settingsStart<0 || settingsEnd<0) throw new GradleException('v3.8: showSettings method not found')
+String settings=m.substring(settingsStart,settingsEnd)
+
+// Remove earlier calorie UI/persistence fragments so this patch owns one clean implementation.
+int calStart=settings.indexOf('        content.addView(section("Calorieën"));')
+if(calStart>=0){
+    int calEnd=settings.indexOf('        content.addView(save);',calStart)
+    if(calEnd<0) calEnd=settings.length()
+    settings=settings.substring(0,calStart)+settings.substring(calEnd)
+}
+settings=settings.replaceAll(/(?s)\s*\.putBoolean\("show_calories",showCalories\.isChecked\(\)\)\s*\.putInt\("max_cal_breakfast",spinnerInt\(maxBreakfast\)\)\s*\.putInt\("max_cal_lunch",spinnerInt\(maxLunch\)\)\s*\.putInt\("max_cal_dinner",spinnerInt\(maxDinner\)\)\s*\.putInt\("max_cal_daily",spinnerInt\(maxDaily\)\)/,'')
+
+int insertAt=settings.indexOf('        content.addView(save);')
+if(insertAt<0) insertAt=settings.length()
+String block='''        content.addView(section("Calorieën"));
+        CheckBox showCalories=new CheckBox(this);
+        showCalories.setText("Aantal calorieën weergeven?");
+        showCalories.setChecked(prefs.getBoolean("show_calories",false));
+        showCalories.setTextColor(INK);
+        content.addView(showCalories);
+        Spinner maxBreakfast=numberSpinner(0,1200,100,prefs.getInt("max_cal_breakfast",0));
+        content.addView(labeledSpinner("Max. kcal ontbijt (0 = geen limiet)",maxBreakfast));
+        Spinner maxLunch=numberSpinner(0,1200,100,prefs.getInt("max_cal_lunch",0));
+        content.addView(labeledSpinner("Max. kcal lunch (0 = geen limiet)",maxLunch));
+        Spinner maxDinner=numberSpinner(0,1200,100,prefs.getInt("max_cal_dinner",0));
+        content.addView(labeledSpinner("Max. kcal avondeten (0 = geen limiet)",maxDinner));
+        Spinner maxDaily=numberSpinner(0,4000,200,prefs.getInt("max_cal_daily",0));
+        content.addView(labeledSpinner("Max. kcal totaal per dag (0 = geen limiet)",maxDaily));
+        content.addView(text("0 betekent geen limiet. Ontbijt, lunch en avondeten: 0–1200 kcal in stappen van 100. Dagtotaal: 0–4000 kcal in stappen van 200.",12,false,MUTED));
+
+        showCalories.setOnCheckedChangeListener((buttonView,isChecked)->
+                prefs.edit().putBoolean("show_calories",isChecked).apply());
+        AdapterView.OnItemSelectedListener calorieListener=new AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(AdapterView<?> parent,View view,int position,long id){
+                prefs.edit()
+                        .putInt("max_cal_breakfast",spinnerInt(maxBreakfast))
+                        .putInt("max_cal_lunch",spinnerInt(maxLunch))
+                        .putInt("max_cal_dinner",spinnerInt(maxDinner))
+                        .putInt("max_cal_daily",spinnerInt(maxDaily))
+                        .apply();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent){}
+        };
+        maxBreakfast.setOnItemSelectedListener(calorieListener);
+        maxLunch.setOnItemSelectedListener(calorieListener);
+        maxDinner.setOnItemSelectedListener(calorieListener);
+        maxDaily.setOnItemSelectedListener(calorieListener);
+
+'''
+settings=settings.substring(0,insertAt)+block+settings.substring(insertAt)
+m=m.substring(0,settingsStart)+settings+m.substring(settingsEnd)
+
+// Remove accidental calorie references from the separate cooking-time schedule method.
+int scheduleStart=m.indexOf('    private void showCookingTimeSchedule(){')
+if(scheduleStart>=0){
+    int scheduleEnd=m.indexOf('\n    private ',scheduleStart+10)
+    if(scheduleEnd<0) scheduleEnd=m.length()
+    String schedule=m.substring(scheduleStart,scheduleEnd)
+    schedule=schedule.replaceAll(/(?s)\s*\.putBoolean\("show_calories",showCalories\.isChecked\(\)\)\s*\.putInt\("max_cal_breakfast",spinnerInt\(maxBreakfast\)\)\s*\.putInt\("max_cal_lunch",spinnerInt\(maxLunch\)\)\s*\.putInt\("max_cal_dinner",spinnerInt\(maxDinner\)\)\s*\.putInt\("max_cal_daily",spinnerInt\(maxDaily\)\)/,'')
+    m=m.substring(0,scheduleStart)+schedule+m.substring(scheduleEnd)
+}
+
+mainFile.write(m,'UTF-8')
+
+// Strict validation of final generated Java source.
+def check=mainFile.getText('UTF-8')
+settingsStart=check.indexOf('    private void showSettings() {')
+settingsEnd=check.indexOf('\n    private ',settingsStart+10)
+settings=check.substring(settingsStart,settingsEnd)
+for(String required : ['Aantal calorieën weergeven?','max_cal_breakfast','max_cal_lunch','max_cal_dinner','max_cal_daily','setOnCheckedChangeListener','calorieListener']){
+    if(!settings.contains(required)) throw new GradleException('v3.8 missing calorie setting: '+required)
+}
+scheduleStart=check.indexOf('    private void showCookingTimeSchedule(){')
+if(scheduleStart>=0){
+    int scheduleEnd=check.indexOf('\n    private ',scheduleStart+10)
+    if(scheduleEnd<0) scheduleEnd=check.length()
+    String schedule=check.substring(scheduleStart,scheduleEnd)
+    if(schedule.contains('showCalories') || schedule.contains('max_cal_breakfast')) throw new GradleException('v3.8: calorie variables leaked into cooking schedule')
+}

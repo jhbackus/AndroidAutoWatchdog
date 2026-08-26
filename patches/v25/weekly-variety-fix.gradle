@@ -1,0 +1,36 @@
+// MT Food v2.5 follow-up: preserve hard variety rules in final fill and use existing cook-time setting.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!plannerFile.exists() || !mainFile.exists()) throw new GradleException('v2.5 fix: generated sources not found')
+
+def p=plannerFile.getText('UTF-8')
+p=p.replace('''        while(chosen.size()<7 && !allowed.isEmpty()) chosen.add(allowed.get(chosen.size()%allowed.size()));''', '''        while(chosen.size()<7 && !allowed.isEmpty()){
+            Recipe extra=null;
+            for(Recipe r:allowed){
+                if(usedIds.contains(r.id)) continue;
+                if(isFishRecipe(r) && fishCount>=2) continue;
+                String mk=meatKey(r);
+                if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+                extra=r; break;
+            }
+            // If every unique recipe is exhausted, only repeat a meatless/non-fish dish;
+            // never break the requested fish/meat limits just to fill seven slots.
+            if(extra==null){
+                for(Recipe r:allowed){
+                    if(!isFishRecipe(r) && meatKey(r)==null){ extra=r; break; }
+                }
+            }
+            if(extra==null) throw new IllegalStateException("Onvoldoende recepten voor ingestelde weekvariatie");
+            chosen.add(extra);
+            usedIds.add(extra.id);
+            if(isFishRecipe(extra)) fishCount++;
+            String mk=meatKey(extra); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);
+        }''')
+if(!p.contains('Onvoldoende recepten voor ingestelde weekvariatie')) throw new GradleException('v2.5 fix: safe fill patch failed')
+plannerFile.write(p,'UTF-8')
+
+def m=mainFile.getText('UTF-8')
+m=m.replace('prefs.getInt("max_minutes",45)','prefs.getInt("cook",35)')
+if(m.contains('prefs.getInt("max_minutes",45)')) throw new GradleException('v2.5 fix: cook setting patch failed')
+mainFile.write(m,'UTF-8')

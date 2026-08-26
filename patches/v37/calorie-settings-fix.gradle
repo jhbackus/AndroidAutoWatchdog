@@ -1,0 +1,108 @@
+// MT Food v3.7: reliably insert calorie settings in the Settings screen.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!mainFile.exists() || !plannerFile.exists()) throw new GradleException('v3.7: generated sources not found')
+
+def m=mainFile.getText('UTF-8')
+
+// Work only inside showSettings(), because earlier patches have changed exact surrounding lines.
+int settingsStart=m.indexOf('    private void showSettings() {')
+int settingsEnd=m.indexOf('\n    private String profileEmoji',settingsStart)
+if(settingsStart<0 || settingsEnd<0) throw new GradleException('v3.7: showSettings method not found')
+String settings=m.substring(settingsStart,settingsEnd)
+
+if(!settings.contains('Aantal calorieën weergeven?')) {
+    int insertAt=settings.lastIndexOf('        content.addView(save);')
+    if(insertAt<0) insertAt=settings.lastIndexOf('        save.setOnClickListener')
+    if(insertAt<0) throw new GradleException('v3.7: settings insertion point not found')
+
+    def block='''        content.addView(section("Calorieën"));
+        CheckBox showCalories=new CheckBox(this);
+        showCalories.setText("Aantal calorieën weergeven?");
+        showCalories.setChecked(prefs.getBoolean("show_calories",false));
+        showCalories.setTextColor(INK);
+        content.addView(showCalories);
+        Spinner maxBreakfast=numberSpinner(0,1200,100,prefs.getInt("max_cal_breakfast",0));
+        content.addView(labeledSpinner("Max. kcal ontbijt (0 = geen limiet)",maxBreakfast));
+        Spinner maxLunch=numberSpinner(0,1200,100,prefs.getInt("max_cal_lunch",0));
+        content.addView(labeledSpinner("Max. kcal lunch (0 = geen limiet)",maxLunch));
+        Spinner maxDinner=numberSpinner(0,1200,100,prefs.getInt("max_cal_dinner",0));
+        content.addView(labeledSpinner("Max. kcal avondeten (0 = geen limiet)",maxDinner));
+        Spinner maxDaily=numberSpinner(0,4000,200,prefs.getInt("max_cal_daily",0));
+        content.addView(labeledSpinner("Max. kcal totaal per dag (0 = geen limiet)",maxDaily));
+        content.addView(text("0 betekent geen limiet. Ontbijt, lunch en avondeten lopen van 0–1200 kcal in stappen van 100; het dagtotaal van 0–4000 kcal in stappen van 200.",12,false,MUTED));
+
+'''
+    settings=settings.substring(0,insertAt)+block+settings.substring(insertAt)
+}
+
+// Ensure the Save action persists all calorie controls. Inject immediately before apply() in this settings method.
+if(!settings.contains('.putBoolean("show_calories",showCalories.isChecked())')) {
+    int prefsStart=settings.indexOf('            prefs.edit()')
+    int applyAt=settings.indexOf('.apply();',prefsStart)
+    if(prefsStart<0 || applyAt<0) throw new GradleException('v3.7: settings persistence chain not found')
+    String persist='''.putBoolean("show_calories",showCalories.isChecked())
+                    .putInt("max_cal_breakfast",spinnerInt(maxBreakfast))
+                    .putInt("max_cal_lunch",spinnerInt(maxLunch))
+                    .putInt("max_cal_dinner",spinnerInt(maxDinner))
+                    .putInt("max_cal_daily",spinnerInt(maxDaily))'''
+    settings=settings.substring(0,applyAt)+persist+settings.substring(applyAt)
+}
+
+m=m.substring(0,settingsStart)+settings+m.substring(settingsEnd)
+
+// Helper widgets, only if an earlier patch did not add them.
+if(!m.contains('private Spinner numberSpinner(')) {
+    def helperMarker='''    private String profileEmoji(HouseholdManager.Person p){'''
+    if(!m.contains(helperMarker)) throw new GradleException('v3.7: helper insertion marker not found')
+    def helpers='''    private Spinner numberSpinner(int min,int max,int step,int selected){
+        Spinner s=new Spinner(this);
+        List<String> vals=new ArrayList<>();
+        for(int x=min;x<=max;x+=step) vals.add(String.valueOf(x));
+        s.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,vals));
+        int idx=Math.max(0,Math.min(vals.size()-1,(selected-min)/step));
+        s.setSelection(idx);
+        return s;
+    }
+    private View labeledSpinner(String label,Spinner s){
+        LinearLayout b=card(CARD);
+        b.addView(text(label,13,true,INK));
+        b.addView(s);
+        return b;
+    }
+    private int spinnerInt(Spinner s){
+        try{return Integer.parseInt(String.valueOf(s.getSelectedItem()));}catch(Exception e){return 0;}
+    }
+
+'''
+    m=m.replace(helperMarker,helpers+helperMarker)
+}
+
+// Show calories in recipe detail when enabled.
+if(!m.contains('kcal per volwassen portie')) {
+    def recipeMarker='''        content.addView(hero);'''
+    def recipeBlock='''        if(prefs.getBoolean("show_calories",false))
+            hero.addView(chip("≈ "+NutritionEstimator.estimateRecipeCalories(m.ingredients)+" kcal per volwassen portie"));
+'''
+    if(m.contains(recipeMarker)) m=m.replaceFirst(java.util.regex.Pattern.quote(recipeMarker),java.util.regex.Matcher.quoteReplacement(recipeBlock+recipeMarker))
+}
+
+mainFile.write(m,'UTF-8')
+
+// Ensure the dinner calorie cap exists.
+def p=plannerFile.getText('UTF-8')
+if(!p.contains('setDinnerCalorieCap')) {
+    p=p.replace('''    private int variantCounter = 0;''','''    private int variantCounter = 0;
+    private int dinnerCalorieCap = 0;
+    public void setDinnerCalorieCap(int cap){ dinnerCalorieCap=Math.max(0,cap); }''')
+    p=p.replace('''    private boolean allowed(Recipe r,Set<String>banned,int maxMinutes,String diet){''','''    private boolean allowed(Recipe r,Set<String>banned,int maxMinutes,String diet){
+        if(dinnerCalorieCap>0 && NutritionEstimator.estimateRecipeCalories(r.ingredients)>dinnerCalorieCap) return false;''')
+}
+plannerFile.write(p,'UTF-8')
+
+// Strict validation: do not ship another APK without the requested controls and persistence.
+def check=mainFile.getText('UTF-8')
+for(String required : ['Aantal calorieën weergeven?','max_cal_breakfast','max_cal_lunch','max_cal_dinner','max_cal_daily','0–4000 kcal','.putBoolean("show_calories",showCalories.isChecked())']) {
+    if(!check.contains(required)) throw new GradleException('v3.7 missing calorie setting: '+required)
+}

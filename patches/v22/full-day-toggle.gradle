@@ -1,0 +1,99 @@
+// MT Food v2.2: allow excluding an entire date from meals and groceries.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!mainActivity.exists()) throw new GradleException('v2.2: generated MainActivity not found')
+
+def s = mainActivity.getText('UTF-8')
+
+// Add per-day active state to the week card and zero all meal counts when the whole day is disabled.
+s = s.replace('''        int breakfastCount=household.count(m.date,HouseholdManager.BREAKFAST);
+        int lunchCount=household.count(m.date,HouseholdManager.LUNCH);
+        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);
+        boolean dinnerEnabled=isDinnerEnabled(m.date);''', '''        boolean dayEnabled=isDayEnabled(m.date);
+        int breakfastCount=dayEnabled?household.count(m.date,HouseholdManager.BREAKFAST):0;
+        int lunchCount=dayEnabled?household.count(m.date,HouseholdManager.LUNCH):0;
+        int dinnerCount=dayEnabled?household.count(m.date,HouseholdManager.DINNER):0;
+        boolean dinnerEnabled=dayEnabled && isDinnerEnabled(m.date);''')
+
+// Whole-day toggle above breakfast/lunch/dinner.
+s = s.replace('''        c.addView(mealLine("🥣","Ontbijt",breakfastCount,breakfast));
+        c.addView(mealLine("🥪","Lunch",lunchCount,lunch));''', '''        CheckBox dayToggle=new CheckBox(this);
+        dayToggle.setText(dayEnabled?"Hele dag actief":"Hele dag uitschakelen / afwezig");
+        dayToggle.setTextColor(dayEnabled?GREEN:MUTED);
+        dayToggle.setChecked(dayEnabled);
+        dayToggle.setPadding(dp(42),dp(5),0,dp(2));
+        dayToggle.setOnCheckedChangeListener((buttonView,checked)->{
+            setDayEnabled(m.date,checked);
+            showWeek();
+        });
+        c.addView(dayToggle);
+
+        c.addView(mealLine("🥣","Ontbijt",breakfastCount,dayEnabled?breakfast:"—"));
+        c.addView(mealLine("🥪","Lunch",lunchCount,dayEnabled?lunch:"—"));''')
+
+// Dinner toggle is unavailable if the complete day is disabled.
+s = s.replace('''        dinnerToggle.setChecked(dinnerEnabled);
+        dinnerToggle.setPadding(dp(42),dp(5),0,dp(2));''', '''        dinnerToggle.setChecked(dinnerEnabled);
+        dinnerToggle.setEnabled(dayEnabled);
+        if(!dayEnabled){ dinnerToggle.setText("Avondeten niet van toepassing"); dinnerToggle.setAlpha(0.45f); }
+        dinnerToggle.setPadding(dp(42),dp(5),0,dp(2));''')
+
+// Do not allow a disabled day to re-enable dinner through the disabled checkbox listener.
+s = s.replace('''        dinnerToggle.setOnCheckedChangeListener((buttonView,checked)->{
+            setDinnerEnabled(m.date,checked);
+            showWeek();
+        });''', '''        dinnerToggle.setOnCheckedChangeListener((buttonView,checked)->{
+            if(!isDayEnabled(m.date)) return;
+            setDinnerEnabled(m.date,checked);
+            showWeek();
+        });''')
+
+// Grocery dinner aggregation excludes a fully disabled day as well.
+s = s.replace('''            if(household.count(m.date,HouseholdManager.DINNER)<=0 || !isDinnerEnabled(m.date)) continue;''', '''            if(!isDayEnabled(m.date) || household.count(m.date,HouseholdManager.DINNER)<=0 || !isDinnerEnabled(m.date)) continue;''')
+
+// Breakfast and lunch quantities are now calculated only over enabled days.
+s = s.replace('''        int breakfastPortions=household.totalMealPortions(currentMonday,HouseholdManager.BREAKFAST);
+        int lunchPortions=household.totalMealPortions(currentMonday,HouseholdManager.LUNCH);''', '''        int breakfastPortions=activeMealPortions(HouseholdManager.BREAKFAST);
+        int lunchPortions=activeMealPortions(HouseholdManager.LUNCH);''')
+
+// Fruit rotation groceries also respect disabled dates.
+s = s.replace('''            int n=household.count(date,HouseholdManager.BREAKFAST);
+            if(n<=0) continue;''', '''            if(!isDayEnabled(date)) continue;
+            int n=household.count(date,HouseholdManager.BREAKFAST);
+            if(n<=0) continue;''')
+
+// Daily AH vegetable shots: count only enabled days and preserve spinach/carrot alternation.
+s = s.replace('''        if(prefs.getBoolean("daily_veg_shot",true)){
+            all.putIfAbsent("AH 85% Groenteshot spinazie","4 stuks");
+            all.putIfAbsent("AH 85% Groenteshot wortel","3 stuks");
+        }''', '''        if(prefs.getBoolean("daily_veg_shot",true)) addDailyVegShotsGroceries(all);''')
+
+// Persist per-date full-day state and helper counts.
+s = s.replace('''    private String dinnerEnabledKey(LocalDate date){ return "dinner_enabled_"+date.toString(); }''', '''    private String dayEnabledKey(LocalDate date){ return "day_enabled_"+date.toString(); }
+    private boolean isDayEnabled(LocalDate date){ return prefs.getBoolean(dayEnabledKey(date),true); }
+    private void setDayEnabled(LocalDate date,boolean enabled){ prefs.edit().putBoolean(dayEnabledKey(date),enabled).commit(); }
+    private int activeMealPortions(int meal){
+        int total=0;
+        for(int d=0;d<7;d++){
+            LocalDate date=currentMonday.plusDays(d);
+            if(isDayEnabled(date)) total+=household.count(date,meal);
+        }
+        return total;
+    }
+    private void addDailyVegShotsGroceries(LinkedHashMap<String,String> all){
+        int spinach=0, carrot=0;
+        for(int d=0;d<7;d++){
+            LocalDate date=currentMonday.plusDays(d);
+            if(!isDayEnabled(date) || household.count(date,HouseholdManager.BREAKFAST)<=0) continue;
+            if(date.getDayOfWeek().getValue()%2==1) spinach++; else carrot++;
+        }
+        if(spinach>0) all.putIfAbsent("AH 85% Groenteshot spinazie",spinach+" stuks");
+        if(carrot>0) all.putIfAbsent("AH 85% Groenteshot wortel",carrot+" stuks");
+    }
+
+    private String dinnerEnabledKey(LocalDate date){ return "dinner_enabled_"+date.toString(); }''')
+
+if(!s.contains('dayEnabledKey') || !s.contains('Hele dag uitschakelen / afwezig') || !s.contains('activeMealPortions') || !s.contains('addDailyVegShotsGroceries')) {
+    throw new GradleException('v2.2 full-day toggle wiring failed')
+}
+mainActivity.write(s,'UTF-8')

@@ -1,18 +1,267 @@
 plugins { id 'com.android.application' }
 
+// MT Food v1.5: all v1.4 features + breakfast fruit rotation + daily AH vegetable shots.
+def ahExtractDir = file("$buildDir/generated/ahweekplanner")
+def chunkDir = rootProject.file('ah-source-v02')
+def packed = chunkDir.listFiles().findAll { it.name.startsWith('chunk-') }.sort { it.name }.collect { it.text.trim() }.join('')
+def zipFile = file("$buildDir/generated/AHWeekplanner-Android-v0.2-source.zip")
+zipFile.parentFile.mkdirs()
+zipFile.bytes = java.util.Base64.decoder.decode(packed)
+copy {
+    from zipTree(zipFile)
+    into ahExtractDir
+}
+def ahProject = file("$ahExtractDir/AHWeekplanner-Android-v0.1")
+
+copy {
+    from rootProject.file('patches/v08/AhClient.java')
+    into file("$ahProject/app/src/main/java/nl/weekplanner/ah")
+}
+copy {
+    from rootProject.file('patches/v11/MainActivity.java')
+    from rootProject.file('patches/v11/HouseholdManager.java')
+    into file("$ahProject/app/src/main/java/nl/weekplanner/ah")
+}
+copy {
+    from rootProject.file('patches/v12/PlannerEngine.java')
+    into file("$ahProject/app/src/main/java/nl/weekplanner/ah")
+}
+
+// Oven and steam-oven recipes retained from v1.3/v1.4.
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+def plannerText = plannerFile.getText('UTF-8')
+def extraRecipes = '''
+        recipes.add(new Recipe("oven-chicken-tray","Ovenschotel kip, krieltjes en mediterrane groente","🍗","AVG",35,"Alles op één bakplaat: kip, krieltjes, paprika, courgette en tomaat.","balanced med heart protein vegetables chicken child oven",
+                L(I("kipdijfilet","150 g p.p.",false),I("krieltjes","220 g p.p.",false),I("paprika","100 g p.p.",false),I("courgette","120 g p.p.",false),I("cherrytomaten","100 g p.p.",false),I("olijfolie","1 el",true),I("Italiaanse kruiden","1 tl",false)),
+                "Verwarm de oven voor op 200 °C.","Verdeel alles over een bakplaat en meng met olie en kruiden.","Rooster 30–35 minuten en schep halverwege om."));
+        recipes.add(new Recipe("oven-salmon-leek","Ovenzalm met prei, aardappel en mosterd-dillesaus","🐟","AVG",35,"Ovenschaal met zalm en groente, met frisse mosterd-dillesaus.","balanced med nordic heart skin menopause omega3 fish salmon protein vegetables oven",
+                L(I("zalmfilet","150 g p.p.",false),I("aardappelschijfjes","220 g p.p.",false),I("prei","160 g p.p.",false),I("magere yoghurt","50 g p.p.",false),I("mosterd","1 tl",true),I("dille","1 bosje",false)),
+                "Verwarm de oven voor op 190 °C.","Bak aardappel en prei 20 minuten voor.","Leg zalm erop en bak nog 12–15 minuten.","Meng yoghurt, mosterd en dille als saus."));
+        recipes.add(new Recipe("oven-pasta","Volkoren pasta-ovenschotel met kip en spinazie","🧀","Pasta",35,"Makkelijke pasta-ovenschotel met kip, spinazie en tomatensaus.","balanced wholegrain protein vegetables chicken child oven",
+                L(I("volkoren penne","85 g p.p.",false),I("kipfilet","120 g p.p.",false),I("spinazie","140 g p.p.",false),I("passata","150 ml p.p.",false),I("mozzarella light","35 g p.p.",false),I("basilicum","1 tl",true)),
+                "Kook pasta 2 minuten korter dan op de verpakking.","Bak kip en spinazie en meng met passata en pasta.","Doe in een ovenschaal, verdeel mozzarella erover en gratineer 15 minuten."));
+        recipes.add(new Recipe("oven-mex","Mexicaanse enchilada-ovenschotel","🌮","Anders",35,"Wraps uit de oven met kip, bonen, paprika, salsa en een beetje kaas.","balanced protein vegetables chicken legume child oven",
+                L(I("volkoren wraps","2 p.p.",false),I("kipfilet","120 g p.p.",false),I("kidneybonen","70 g p.p.",false),I("paprika","100 g p.p.",false),I("salsa","60 g p.p.",false),I("geraspte kaas","25 g p.p.",false),I("Mexicaanse kruiden","1 tl p.p.",false)),
+                "Bak kip, paprika en bonen met kruiden.","Vul de wraps en leg in een ovenschaal.","Bedek met salsa en kaas en bak 15–20 minuten op 200 °C."));
+        recipes.add(new Recipe("steam-salmon","Stoomoven zalm met krieltjes, broccoli en citroen","💨🐟","AVG",30,"Zalm en groente deels gestoomd voor een sappig resultaat en weinig extra vet.","balanced med nordic heart skin menopause omega3 protein vegetables fish salmon steamoven",
+                L(I("zalmfilet","150 g p.p.",false),I("krieltjes","220 g p.p.",false),I("broccoli","200 g p.p.",false),I("citroen","½",false),I("dille","1 bosje",false),I("magere yoghurt","40 g p.p.",false)),
+                "Stoom de krieltjes in de stoomoven tot bijna gaar.","Voeg broccoli toe en stoom verder.","Stoom of combi-stoom de zalm tot net gaar.","Serveer met citroen en yoghurt-dillesaus."));
+        recipes.add(new Recipe("steam-chicken","Stoomoven kip met zoete aardappel en groene groente","💨🍗","AVG",35,"Kip uit de combi-stoomoven met zoete aardappel en veel groene groente.","balanced dash bp heart glucose protein vegetables chicken steamoven",
+                L(I("kipfilet","150 g p.p.",false),I("zoete aardappel","200 g p.p.",false),I("broccoli","120 g p.p.",false),I("sperziebonen","100 g p.p.",false),I("paprikapoeder","1 tl",true),I("olijfolie","1 tl p.p.",true)),
+                "Gaar zoete aardappel voor met stoom.","Leg kip en groente erbij.","Gebruik combi-stoom tot de kip gaar en sappig is.","Kruid met paprikapoeder en een beetje olijfolie."));
+        recipes.add(new Recipe("steam-dumpling-bowl","Stoomoven groentebowl met gestoomde dumplings en edamame","🥟","Anders",25,"Snelle bowl waarbij de stoomoven de dumplings en groente tegelijk gaart.","balanced veg vegetables legume steamoven child",
+                L(I("groentedumplings","5 p.p.",false),I("edamame","80 g p.p.",false),I("paksoi","120 g p.p.",false),I("wortel","80 g p.p.",false),I("zilvervliesrijst","60 g p.p.",false),I("sojasaus","15 ml p.p.",true),I("sesamzaad","1 tl p.p.",false)),
+                "Kook de rijst.","Stoom dumplings, paksoi, wortel en edamame in de stoomoven.","Verdeel over kommen met rijst.","Maak af met sojasaus en sesam."));
+        recipes.add(new Recipe("steam-cod","Stoomoven kabeljauw met venkel, wortel en aardappel","💨🐟","AVG",30,"Milde vismaaltijd die volledig in de stoomoven kan worden voorbereid.","balanced nordic dash heart protein vegetables fish steamoven",
+                L(I("kabeljauw","160 g p.p.",false),I("aardappelen","210 g p.p.",false),I("venkel","120 g p.p.",false),I("wortel","100 g p.p.",false),I("citroen","½",false),I("peterselie","1 bosje",false)),
+                "Stoom aardappel, venkel en wortel voor.","Voeg de kabeljauw toe wanneer de groente bijna gaar is.","Stoom tot de vis net uit elkaar valt.","Werk af met citroen en peterselie."));
+'''
+plannerText = plannerText.replaceFirst(/(?s)\n    }\n}\s*$/, '\n' + extraRecipes + '    }\n}\n')
+if(!plannerText.contains('steam-salmon') || !plannerText.contains('oven-chicken-tray')) throw new GradleException('v1.5 extra recipes injection failed')
+plannerFile.write(plannerText,'UTF-8')
+
+// UI and settings wiring.
+def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+def mainText = mainActivity.getText('UTF-8')
+mainText = mainText.replace('private final Set<String> pantry = new LinkedHashSet<>();',
+        'private final Set<String> pantry = new LinkedHashSet<>();\n    private int menuVariant = 0;')
+mainText = mainText.replace('household = new HouseholdManager(prefs);',
+        'household = new HouseholdManager(prefs);\n        initV15Defaults();')
+// Only replace the breakfast line inside mealCard; do not touch showGroceries.
+mainText = mainText.replace('''        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);
+        String breakfast=prefs.getString("breakfast","yoghurt / kwark, havermout, blauwe bessen");''',
+'''        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);
+        String breakfast=breakfastForDate(m.date);''')
+mainText = mainText.replace('''        if(breakfastPortions>0){
+            String breakfast=prefs.getString("breakfast","yoghurt / kwark, havermout, blauwe bessen");
+            for(String x:breakfast.split(",")) if(!x.trim().isEmpty()) all.putIfAbsent(x.trim(),"voor "+breakfastPortions+" ontbijt-porties");
+        }''',
+'''        if(breakfastPortions>0){
+            String breakfast=prefs.getString("breakfast","yoghurt / kwark");
+            for(String x:breakfast.split(",")) if(!x.trim().isEmpty()) all.putIfAbsent(x.trim(),"voor "+breakfastPortions+" ontbijt-porties");
+            addBreakfastFruitGroceries(all);
+        }''')
+mainText = mainText.replace('''        all.putIfAbsent("Kinder Bueno","1 multipack");
+        all.putIfAbsent("fruit","voor 7 dagen");
+        all.putIfAbsent("ongezouten noten","1 zak");''',
+'''        all.putIfAbsent("Kinder Bueno","1 multipack");
+        all.putIfAbsent("fruit","voor 7 dagen");
+        all.putIfAbsent("ongezouten noten","1 zak");
+        if(prefs.getBoolean("daily_veg_shot",true)){
+            all.putIfAbsent("AH 85% Groenteshot spinazie","4 stuks");
+            all.putIfAbsent("AH 85% Groenteshot wortel","3 stuks");
+        }''')
+mainText = mainText.replace('''        content.addView(section("Vaste lunchartikelen"));
+        EditText lunch=input("Lunchartikelen (komma's)",prefs.getString("lunch","volkoren brood, eieren, hummus, komkommer"));''',
+'''        content.addView(section("Ontbijtfruit"));
+        EditText breakfastFruits=input("Fruitvariatie bij ontbijt (komma's)",prefs.getString("breakfast_fruits","blauwe bessen, aardbeien, frambozen, kiwi, appel, peer, mandarijn"));
+        content.addView(breakfastFruits);
+        content.addView(text("MT Food roteert deze soorten per ontbijtdag.",12,false,MUTED));
+        content.addView(section("Dagelijkse groenteshot"));
+        CheckBox dailyShot=new CheckBox(this);
+        dailyShot.setText("1 AH groenteshot per dag");
+        dailyShot.setChecked(prefs.getBoolean("daily_veg_shot",true));
+        dailyShot.setTextColor(INK);
+        content.addView(dailyShot);
+        content.addView(text("Alleen AH 85% Groenteshot spinazie en AH 85% Groenteshot wortel; standaard 4× spinazie en 3× wortel per week.",12,false,MUTED));
+
+        content.addView(section("Vaste lunchartikelen"));
+        EditText lunch=input("Lunchartikelen (komma's)",prefs.getString("lunch","volkoren brood, eieren, hummus, komkommer"));''')
+mainText = mainText.replace('''                    if(!found.isEmpty()) lines.add(new AhClient.AhLine(found.get(0).id,1)); else missed++;''',
+'''                    if(!found.isEmpty()) {
+                        int qty=1;
+                        if("AH 85% Groenteshot spinazie".equals(name)) qty=4;
+                        else if("AH 85% Groenteshot wortel".equals(name)) qty=3;
+                        lines.add(new AhClient.AhLine(found.get(0).id,qty));
+                    } else missed++;''')
+mainText = mainText.replace('String diet=prefs.getString("diet_style","Gezond & gevarieerd");',
+        'String diet=prefs.getString("diet_style","Gezond & gevarieerd");\n        boolean hasSteamOven=prefs.getBoolean("steam_oven",false);\n        if(!hasSteamOven) banned.add("stoomoven");')
+mainText = mainText.replace('return planner.makeWeek(currentMonday,banned,max);',
+        'String favs=prefs.getString("favorites","");\n        if(hasSteamOven) favs=favs+", stoomoven";\n        return planner.makeWeek(currentMonday,banned,max,diet,household.nutritionFlags(),favs,menuVariant++);')
+mainText = mainText.replace('content.addView(section("Planning"));',
+'''content.addView(section("Apparatuur"));
+        CheckBox steamOven=new CheckBox(this);
+        steamOven.setText("Stoomoven aanwezig");
+        steamOven.setChecked(prefs.getBoolean("steam_oven",false));
+        steamOven.setTextColor(INK);
+        content.addView(steamOven);
+        content.addView(text("Als dit aan staat mogen recepten worden gekozen die de stoom- of combi-stoomfunctie gebruiken.",12,false,MUTED));
+
+        content.addView(section("Planning"));''')
+mainText = mainText.replace('.putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins).apply();',
+        '.putBoolean("steam_oven",steamOven.isChecked())\n                    .putBoolean("sunday_next",sunday.isChecked()).putInt("cook",mins).commit();')
+mainText = mainText.replace('buildShell("Huishouden, 2-wekenrooster en voedingsprofiel", 3);',
+'''buildShell("Huishouden, 2-wekenrooster en voedingsprofiel", 3);
+        LinearLayout autoInfo=card(GREEN_LIGHT);
+        autoInfo.addView(text("✓ Wijzigingen worden automatisch opgeslagen",15,true,GREEN));
+        autoInfo.addView(text("Tekstvelden en de groenteshot-instelling worden direct opgeslagen.",12,false,MUTED));
+        content.addView(autoInfo);''')
+mainText = mainText.replace('Button save=primary("Opslaan");', 'Button save=primary("💾  Opslaan");')
+mainText = mainText.replace('Koppeling en veilige praktijktest • v1.1', 'Koppeling en veilige praktijktest • v1.5')
+mainText = mainText.replace('Jullie complete eetweek • ontbijt, lunch en avondeten', 'Jullie complete eetweek • fruitvariatie, profielen & apparatuur')
+
+// Inject autosave hooks after all fields exist.
+def autosaveMarker = '        Button save=primary("💾  Opslaan");'
+def autosaveCode = '''
+        breakfast.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("breakfast",normalizeList(breakfast.getText().toString())).commit();}});
+        breakfastFruits.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("breakfast_fruits",normalizeList(breakfastFruits.getText().toString())).commit();}});
+        dailyShot.setOnCheckedChangeListener((b,checked)->prefs.edit().putBoolean("daily_veg_shot",checked).commit());
+        lunch.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("lunch",normalizeList(lunch.getText().toString())).commit();}});
+        fav.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("favorites",normalizeList(fav.getText().toString())).commit();}});
+        banned.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("banned",normalizeList(banned.getText().toString())).commit();}});
+        stock.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("pantry",normalizeList(stock.getText().toString())).commit();loadPantry();}});
+'''
+mainText = mainText.replace(autosaveMarker, autosaveCode + '\n' + autosaveMarker)
+
+mainText = mainText.replace('''            prefs.edit().putString("breakfast",breakfast.getText().toString())
+                    .putString("lunch",lunch.getText().toString())
+                    .putString("favorites",fav.getText().toString())
+                    .putString("banned",banned.getText().toString())
+                    .putString("pantry",stock.getText().toString())''',
+'''            prefs.edit().putString("breakfast",normalizeList(breakfast.getText().toString()))
+                    .putString("breakfast_fruits",normalizeList(breakfastFruits.getText().toString()))
+                    .putBoolean("daily_veg_shot",dailyShot.isChecked())
+                    .putString("lunch",normalizeList(lunch.getText().toString()))
+                    .putString("favorites",normalizeList(fav.getText().toString()))
+                    .putString("banned",normalizeList(banned.getText().toString()))
+                    .putString("pantry",normalizeList(stock.getText().toString()))''')
+
+// Helper methods for v1.5 and list normalization.
+mainText = mainText.replace('private void loadPantry(){',
+'''private void initV15Defaults(){
+        if(!prefs.contains("breakfast_fruits")) prefs.edit().putString("breakfast_fruits","blauwe bessen, aardbeien, frambozen, kiwi, appel, peer, mandarijn").commit();
+        if(!prefs.contains("daily_veg_shot")) prefs.edit().putBoolean("daily_veg_shot",true).commit();
+        if(!prefs.getBoolean("v15_breakfast_migrated",false)){
+            String raw=prefs.getString("breakfast","yoghurt / kwark, blauwe bessen");
+            ArrayList<String> keep=new ArrayList<>();
+            for(String x:raw.split(",")){
+                String t=x.trim();
+                if(t.equalsIgnoreCase("blauwe bessen") || t.equalsIgnoreCase("aardbeien") || t.equalsIgnoreCase("frambozen") || t.equalsIgnoreCase("kiwi") || t.equalsIgnoreCase("appel") || t.equalsIgnoreCase("peer") || t.equalsIgnoreCase("mandarijn")) continue;
+                if(!t.isEmpty()) keep.add(t);
+            }
+            prefs.edit().putString("breakfast",android.text.TextUtils.join(", ",keep)).putBoolean("v15_breakfast_migrated",true).commit();
+        }
+    }
+
+    private String breakfastFruitForDate(LocalDate date){
+        String raw=normalizeList(prefs.getString("breakfast_fruits","blauwe bessen, aardbeien, frambozen, kiwi, appel, peer, mandarijn"));
+        if(raw.isEmpty()) return "";
+        String[] fruits=raw.split(",");
+        return fruits[Math.floorMod(date.getDayOfYear(),fruits.length)].trim();
+    }
+
+    private String breakfastForDate(LocalDate date){
+        String base=normalizeList(prefs.getString("breakfast","yoghurt / kwark"));
+        String fruit=breakfastFruitForDate(date);
+        String out=base;
+        if(!fruit.isEmpty()) out+=(out.isEmpty()?"":" • ")+fruit;
+        if(prefs.getBoolean("daily_veg_shot",true)){
+            String shot=(date.getDayOfWeek().getValue()%2==1)?"AH groenteshot spinazie":"AH groenteshot wortel";
+            out+=(out.isEmpty()?"":" • ")+shot;
+        }
+        return out;
+    }
+
+    private void addBreakfastFruitGroceries(LinkedHashMap<String,String> all){
+        LinkedHashMap<String,Integer> counts=new LinkedHashMap<>();
+        for(int d=0;d<7;d++){
+            LocalDate date=currentMonday.plusDays(d);
+            int n=household.count(date,HouseholdManager.BREAKFAST);
+            if(n<=0) continue;
+            String f=breakfastFruitForDate(date);
+            if(!f.isEmpty()) counts.put(f,counts.getOrDefault(f,0)+n);
+        }
+        for(Map.Entry<String,Integer> e:counts.entrySet()) all.putIfAbsent(e.getKey(),"voor "+e.getValue()+" ontbijt-porties");
+    }
+
+    private String normalizeList(String raw){
+        if(raw==null)return "";
+        ArrayList<String> clean=new ArrayList<>();
+        for(String x:raw.split(",")){
+            String t=x.trim();
+            if(!t.isEmpty())clean.add(t);
+        }
+        return android.text.TextUtils.join(", ",clean);
+    }
+
+    private void loadPantry(){''')
+
+if(!mainText.contains('breakfast_fruits') || !mainText.contains('daily_veg_shot') || !mainText.contains('AH 85% Groenteshot spinazie') || !mainText.contains('breakfastForDate') || !mainText.contains('normalizeList')) {
+    throw new GradleException('v1.5 breakfast/shot wiring failed')
+}
+mainActivity.write(mainText,'UTF-8')
+
+copy {
+    from rootProject.file('patches/v03/AndroidManifest.xml')
+    into file("$ahProject/app/src/main")
+}
+def iconDir = file("$ahProject/app/src/main/res/drawable")
+iconDir.mkdirs()
+copy {
+    from rootProject.file('patches/v03/ic_mt_food.xml')
+    into iconDir
+}
+
 android {
-    namespace 'nl.aakeeper.app'
+    namespace 'nl.weekplanner.ah'
     compileSdk 35
 
     defaultConfig {
-        applicationId 'nl.aakeeper.app'
+        applicationId 'nl.weekplanner.ah'
         minSdk 26
         targetSdk 35
-        versionCode 6
+        versionCode 15
         versionName '1.5.0'
     }
 
-    buildFeatures { aidl true }
+    sourceSets {
+        main {
+            manifest.srcFile file("$ahProject/app/src/main/AndroidManifest.xml")
+            java.srcDirs = [file("$ahProject/app/src/main/java")]
+            res.srcDirs = [file("$ahProject/app/src/main/res")]
+            aidl.srcDirs = []
+        }
+    }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
@@ -27,9 +276,4 @@ android {
     }
 }
 
-dependencies {
-    def shizuku_version = '13.1.5'
-    implementation "dev.rikka.shizuku:api:$shizuku_version"
-    implementation "dev.rikka.shizuku:provider:$shizuku_version"
-    implementation 'androidx.annotation:annotation:1.8.2'
-}
+dependencies { }

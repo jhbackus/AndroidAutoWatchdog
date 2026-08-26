@@ -1,0 +1,23 @@
+// MT Food v2.6: make a subset of recipes deliberately more involved (5-7 preparation steps).
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!plannerFile.exists()) throw new GradleException('v2.6 multistep: generated PlannerEngine not found')
+
+def s = plannerFile.getText('UTF-8')
+
+s = s.replace('''"Verwarm de oven voor op 200 °C.","Meng aardappel, courgette en ui met olijfolie en oregano.","Leg de kipdij ertussen en besprenkel met citroen.","Rooster 30–35 minuten tot alles gaar en goudbruin is."''', '''"Meng citroenrasp, citroensap, oregano en olijfolie tot marinade.","Wrijf de kipdij in met de marinade en laat 10 minuten staan.","Verwarm de oven voor op 200 °C en snijd aardappel, courgette en ui.","Rooster de aardappel 15 minuten voor.","Voeg courgette, ui en kip toe en schep om met de achtergebleven marinade.","Rooster nog 20–25 minuten tot de kip gaar en de groenten goudbruin zijn.","Laat 3 minuten rusten en werk af met extra citroen."''')
+
+s = s.replace('''"Verwarm de oven voor op 210 °C.","Vorm köfte van gehakt, komijn en paprikapoeder.","Rooster aardappel en paprika 20 minuten en voeg daarna de köfte toe.","Bak nog 15 minuten en serveer met yoghurt en peterselie."''', '''"Verwarm de oven voor op 210 °C en snijd aardappelen en paprika.","Meng het gehakt met komijn, paprikapoeder en de helft van de peterselie.","Vorm kleine köfte en zet ze koel terwijl de aardappelen 15 minuten voorroosteren.","Voeg paprika en köfte toe aan de bakplaat.","Rooster nog 15–18 minuten en keer de köfte halverwege.","Meng yoghurt met de rest van de peterselie en een klein scheutje water tot saus.","Serveer de köfte met aardappel, paprika en yoghurtsaus."''')
+
+s = s.replace('''"Meng de helft van de yoghurt met tandoorikruiden en marineer de kip.","Rooster aardappel en bloemkool 15 minuten op 210 °C.","Voeg de kip toe en rooster nog 20 minuten.","Serveer met de rest van de yoghurt en citroen."''', '''"Meng de helft van de yoghurt met tandoorikruiden en marineer de kip minimaal 10 minuten.","Verwarm de oven voor op 210 °C.","Snijd aardappel klein en rooster 10 minuten voor.","Voeg bloemkool toe en rooster nog 5 minuten.","Leg de gemarineerde kip tussen de groenten en rooster nog 18–20 minuten.","Meng de rest van de yoghurt met citroensap.","Serveer met de frisse yoghurtdressing."''')
+
+s = s.replace('''"Bak de kipdij rondom bruin.","Voeg paprika, tomaat en paprikapoeder toe.","Roer rijst en water erdoor en laat gaar worden.","Voeg doperwten toe en werk af met citroen."''', '''"Bak de kipdij rondom bruin en haal tijdelijk uit de pan.","Fruit paprika met gerookt paprikapoeder.","Voeg tomaat en rijst toe en bak 1 minuut mee.","Schenk water erbij en leg de kip terug in de pan.","Laat zacht koken tot de rijst bijna gaar is.","Voeg doperwten toe voor de laatste 5 minuten.","Laat 3 minuten rusten en werk af met citroen."''')
+
+s = s.replace('''"Kook de rijst.","Bak tofu krokant en wok broccoli en wortel.","Roer pindakaas, sojasaus, limoen en wat water tot saus.","Serveer alles als bowl met de saus."''', '''"Kook de rijst en laat na het afgieten kort droogstomen.","Dep tofu droog, snijd in blokjes en bak rondom krokant.","Wok broccoli en wortel beetgaar.","Roer pindakaas, sojasaus, limoensap en een scheut warm water tot saus.","Schep de tofu door de helft van de saus.","Verdeel rijst, groenten en tofu over kommen en lepel de rest van de saus erover."''')
+
+s = s.replace('''"Verwarm de oven voor op 200 °C.","Meng alle groenten met tomaat, bonen, kruiden en olijfolie.","Bak 30–35 minuten.","Schep halverwege om en serveer eventueel met volkoren brood."''', '''"Verwarm de oven voor op 200 °C.","Snijd courgette, aubergine en paprika in gelijke stukken.","Meng de groenten met olijfolie en Provençaalse kruiden.","Rooster 15 minuten.","Voeg tomatenblokjes en uitgelekte witte bonen toe.","Bak nog 18–20 minuten en schep halverwege om.","Laat kort rusten en serveer eventueel met volkoren brood."''')
+
+if(!s.contains('Wrijf de kipdij in met de marinade') || !s.contains('Laat 3 minuten rusten en werk af met citroen')) {
+    throw new GradleException('v2.6 multistep preparation patch failed')
+}
+plannerFile.write(s,'UTF-8')

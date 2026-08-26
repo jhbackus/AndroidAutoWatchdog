@@ -1,0 +1,147 @@
+// MT Food v2.8: choose a cuisine before replacing a meal. Random is the default.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!plannerFile.exists() || !mainFile.exists()) throw new GradleException('v2.8: generated sources not found')
+
+def p = plannerFile.getText('UTF-8')
+
+// Extend contextual replacement with an optional cuisine filter.
+p = p.replace('''    public Meal replaceMeal(LocalDate date, Meal oldMeal, List<Meal> activeOtherMeals,
+                            Set<String> banned, int maxMinutes, String diet,
+                            Set<String> nutritionFlags, String favourites, int variant,
+                            Set<String> excludedTitles){''', '''    public Meal replaceMeal(LocalDate date, Meal oldMeal, List<Meal> activeOtherMeals,
+                            Set<String> banned, int maxMinutes, String diet,
+                            Set<String> nutritionFlags, String favourites, int variant,
+                            Set<String> excludedTitles, String cuisine){''')
+
+p = p.replace('''        for(Recipe r:allowedRecipes){
+            if(oldMeal!=null && r.title.equals(oldMeal.title)) continue;
+            if(usedTitles.contains(r.title)) continue;
+            if(excludedTitles!=null && excludedTitles.contains(r.title)) continue;''', '''        for(Recipe r:allowedRecipes){
+            if(oldMeal!=null && r.title.equals(oldMeal.title)) continue;
+            if(usedTitles.contains(r.title)) continue;
+            if(excludedTitles!=null && excludedTitles.contains(r.title)) continue;
+            if(!matchesCuisine(r,cuisine)) continue;''')
+
+p = p.replace('''    private static String proteinTag(Set<String>t){''', '''    private static boolean matchesCuisine(Recipe r,String cuisine){
+        if(cuisine==null || cuisine.trim().isEmpty() || "Random".equals(cuisine)) return true;
+        String c=cuisine.toLowerCase(Locale.ROOT);
+        String id=r.id.toLowerCase(Locale.ROOT);
+        String title=r.title.toLowerCase(Locale.ROOT);
+        Set<String> t=r.tags;
+        switch(c){
+            case "indonesisch": return t.contains("indonesian") || id.startsWith("indo-") || title.contains("indones");
+            case "thais": return t.contains("thai") || id.startsWith("thai-") || title.contains("thai") || title.contains("thaise");
+            case "vietnamees": return t.contains("vietnamese") || id.startsWith("vietnam-") || title.contains("vietnam");
+            case "japans": return t.contains("japanese") || id.startsWith("japan-") || title.contains("japan") || title.contains("yakitori") || title.contains("teriyaki");
+            case "koreaans": return t.contains("korean") || id.startsWith("korean-") || title.contains("korea");
+            case "chinees": return t.contains("chinese") || id.startsWith("china-") || title.contains("chinese") || title.contains("gemberkip") || title.contains("zoetzure");
+            case "grieks": return id.startsWith("greek-") || title.contains("griek");
+            case "spaans": return id.startsWith("spanish-") || title.contains("spaanse") || title.contains("spaans");
+            case "frans": return id.startsWith("french-") || title.contains("franse") || title.contains("ratatouille");
+            case "mexicaans": return id.startsWith("mexican-") || title.contains("mexica") || title.contains("fajita") || title.contains("enchilada") || title.contains("wrap");
+            case "indiaas": return id.startsWith("indian-") || title.contains("tandoori") || title.contains("madras") || title.contains("curry");
+            case "marokkaans": return id.startsWith("moroccan-") || title.contains("marokka");
+            case "turks": return id.startsWith("turkish-") || title.contains("turk") || title.contains("köfte") || title.contains("kofte");
+            case "libanees": return id.startsWith("lebanese-") || title.contains("libane") || title.contains("tabouleh") || title.contains("shawarma");
+            case "italiaans": return id.startsWith("italian-") || title.contains("pasta") || title.contains("bolognese") || title.contains("pesto") || title.contains("gnocchi") || title.contains("lasagne") || title.contains("lasagna");
+            case "mediterraan": return t.contains("med") || title.contains("mediterra");
+            case "nederlands":
+                return r.category.equals("AVG") && !t.contains("asian") && !id.startsWith("greek-") && !id.startsWith("spanish-") && !id.startsWith("moroccan-") && !id.startsWith("turkish-") && !id.startsWith("indian-");
+            default: return true;
+        }
+    }
+
+    private static String proteinTag(Set<String>t){''')
+
+if(!p.contains('matchesCuisine(Recipe r,String cuisine)') || !p.contains('Set<String> excludedTitles, String cuisine')) {
+    throw new GradleException('v2.8 planner cuisine patch failed')
+}
+plannerFile.write(p,'UTF-8')
+
+def m = mainFile.getText('UTF-8')
+
+// Replace the inline replacement listener with a cuisine selection dialog.
+def replacementPattern = ~/(?s)        Button replace=secondary\("↻  Vervang dit gerecht"\);\n        replace\.setOnClickListener\(v->\{.*?\n        \}\);\n        content\.addView\(replace\);/
+def matcher = replacementPattern.matcher(m)
+if(!matcher.find()) throw new GradleException('v2.8: replacement button block not found')
+
+def replacementBlock = '''        Button replace=secondary("↻  Vervang dit gerecht");
+        replace.setOnClickListener(v->showCuisineReplacementDialog(m));
+        content.addView(replace);'''
+m = matcher.replaceFirst(java.util.regex.Matcher.quoteReplacement(replacementBlock))
+
+// Insert the popup + context-aware replacement helper before groceries.
+m = m.replace('''    private void showGroceries() {''', '''    private void showCuisineReplacementDialog(PlannerEngine.Meal meal){
+        final String[] cuisines={
+                "Random","Nederlands","Italiaans","Grieks","Spaans","Frans","Mexicaans","Indiaas",
+                "Indonesisch","Thais","Vietnamees","Japans","Koreaans","Chinees","Marokkaans","Turks","Libanees","Mediterraan"
+        };
+        final int[] selected={0};
+        AlertDialog dlg=new AlertDialog.Builder(this)
+                .setTitle("Uit welke keuken?")
+                .setSingleChoiceItems(cuisines,0,(d,which)->selected[0]=which)
+                .setPositiveButton("Vervangen",null)
+                .setNegativeButton("Annuleren",null)
+                .create();
+        dlg.setOnShowListener(x->dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{
+            String cuisine=cuisines[selected[0]];
+            replaceMealWithCuisine(meal,cuisine);
+            dlg.dismiss();
+        }));
+        dlg.show();
+    }
+
+    private void replaceMealWithCuisine(PlannerEngine.Meal meal,String cuisine){
+        List<PlannerEngine.Meal> activeMeals=new ArrayList<>();
+        for(PlannerEngine.Meal x:currentWeek){
+            if(!isWholeDaySkipped(x.date) && isMealEnabled(x.date,"dinner")) activeMeals.add(x);
+        }
+        int maxMin=prefs.getInt("cook",35);
+        Set<String> banned=new LinkedHashSet<>();
+        String bannedRaw=prefs.getString("banned","");
+        for(String x:bannedRaw.split(",")) if(!x.trim().isEmpty()) banned.add(x.trim());
+
+        String histKey="replacement_history_"+meal.date.toString();
+        Set<String> history=new LinkedHashSet<>();
+        String histRaw=prefs.getString(histKey,"");
+        if(!histRaw.isEmpty()) Collections.addAll(history,histRaw.split("\\u001F",-1));
+        history.add(meal.title);
+
+        PlannerEngine.Meal replacement=planner.replaceMeal(
+                meal.date,meal,activeMeals,banned,maxMin,
+                prefs.getString("diet_style","Gezond & gevarieerd"),
+                household.nutritionFlags(),prefs.getString("favourites",""),
+                prefs.getInt("menu_variant",0)+history.size(),history,cuisine);
+
+        if(replacement==meal || replacement.title.equals(meal.title)){
+            // Keep the cuisine constraint but reset only this date's history when that cuisine is exhausted.
+            history.clear();
+            history.add(meal.title);
+            replacement=planner.replaceMeal(
+                    meal.date,meal,activeMeals,banned,maxMin,
+                    prefs.getString("diet_style","Gezond & gevarieerd"),
+                    household.nutritionFlags(),prefs.getString("favourites",""),
+                    prefs.getInt("menu_variant",0)+97,history,cuisine);
+        }
+
+        if(replacement==meal || replacement.title.equals(meal.title)){
+            Toast.makeText(this,"Geen ander passend gerecht gevonden binnen "+cuisine,Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        history.add(replacement.title);
+        prefs.edit().putString(histKey,android.text.TextUtils.join("\\u001F",history)).apply();
+        for(int i=0;i<currentWeek.size();i++){
+            if(currentWeek.get(i).date.equals(meal.date)){ currentWeek.set(i,replacement); break; }
+        }
+        showWeek();
+    }
+
+    private void showGroceries() {''')
+
+if(!m.contains('Uit welke keuken?') || !m.contains('showCuisineReplacementDialog') || !m.contains('history,cuisine')) {
+    throw new GradleException('v2.8 cuisine dialog wiring failed')
+}
+mainFile.write(m,'UTF-8')

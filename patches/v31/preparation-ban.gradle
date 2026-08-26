@@ -1,0 +1,31 @@
+// MT Food v3.1: allow banning specific preparations without banning the base ingredient.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!plannerFile.exists()) throw new GradleException('v3.1: generated PlannerEngine not found')
+
+def s = plannerFile.getText('UTF-8')
+
+def old = '''        for(String ban:banned){
+            String b=ban.toLowerCase(Locale.ROOT).trim(); if(b.isEmpty())continue;
+            if(r.title.toLowerCase(Locale.ROOT).contains(b))return false;
+            for(Ingredient i:r.ingredients) if(i.name.toLowerCase(Locale.ROOT).contains(b))return false;
+        }'''
+
+def replacement = '''        for(String ban:banned){
+            String b=ban.toLowerCase(Locale.ROOT).trim(); if(b.isEmpty())continue;
+            // A banned preparation may occur in the recipe name, description or method.
+            // Example: "aardappelpuree" blocks puree dishes but not plain "aardappelen".
+            if(r.title.toLowerCase(Locale.ROOT).contains(b)) return false;
+            if(r.description.toLowerCase(Locale.ROOT).contains(b)) return false;
+            for(String step:r.steps) if(step.toLowerCase(Locale.ROOT).contains(b)) return false;
+            // Ingredient bans still work normally, but only when the actual ingredient text matches.
+            for(Ingredient i:r.ingredients) if(i.name.toLowerCase(Locale.ROOT).contains(b)) return false;
+        }'''
+
+if(!s.contains(old)) throw new GradleException('v3.1: banned-filter block not found')
+s = s.replace(old,replacement)
+
+if(!s.contains('r.description.toLowerCase(Locale.ROOT).contains(b)') || !s.contains('for(String step:r.steps)')) {
+    throw new GradleException('v3.1: preparation-aware ban patch failed')
+}
+plannerFile.write(s,'UTF-8')

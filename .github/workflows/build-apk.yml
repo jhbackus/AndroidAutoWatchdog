@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -20,6 +20,25 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Apply MT Food v1.6 patch when present
+        shell: python
+        run: |
+          from pathlib import Path
+          patch=Path('patches/v16/crisp.gradle')
+          if patch.exists():
+              p=Path('app/build.gradle')
+              s=p.read_text()
+              # Keep the v1.5 breakfast hotfix that was previously applied only in a dedicated workflow.
+              old='''mainText = mainText.replace('String breakfast=prefs.getString(\"breakfast\",\"yoghurt / kwark, havermout, blauwe bessen\");',\n        'String breakfast=breakfastForDate(m.date);')'''
+              if old in s:
+                  new='''mainText = mainText.replace(''' + "'''" + '''        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);\n        String breakfast=prefs.getString(\"breakfast\",\"yoghurt / kwark, havermout, blauwe bessen\");''' + "'''" + ''',\n''' + "'''" + '''        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);\n        String breakfast=breakfastForDate(m.date);''' + "'''" + ''')'''
+                  s=s.replace(old,new)
+              marker='dependencies { }'
+              if "patches/v16/crisp.gradle" not in s:
+                  if marker not in s:
+                      raise SystemExit('build.gradle marker not found')
+                  s=s.replace(marker, "apply from: rootProject.file('patches/v16/crisp.gradle')\n\n"+marker)
+              p.write_text(s)
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4

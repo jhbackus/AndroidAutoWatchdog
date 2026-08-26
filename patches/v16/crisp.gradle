@@ -1,0 +1,142 @@
+// MT Food v1.6 Crisp integration patch. Applied after app/build.gradle has generated the Android source.
+
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!mainActivity.exists() || !plannerFile.exists()) throw new GradleException('v1.6: generated MT Food sources not found')
+
+def mainText = mainActivity.getText('UTF-8')
+def crispDefaults = 'granaatappelsap 500ml, krabsalade, hopjesvla, eendenbout gegaard, sukade gegaard, lamsschenkel, kurkumashots, gembershots'
+
+// Add configured Crisp preference products to the separate Crisp list and never route them to AH.
+mainText = mainText.replace('''        if(prefs.getBoolean("daily_veg_shot",true)){
+            all.putIfAbsent("AH 85% Groenteshot spinazie","4 stuks");
+            all.putIfAbsent("AH 85% Groenteshot wortel","3 stuks");
+        }''', '''        if(prefs.getBoolean("daily_veg_shot",true)){
+            all.putIfAbsent("AH 85% Groenteshot spinazie","4 stuks");
+            all.putIfAbsent("AH 85% Groenteshot wortel","3 stuks");
+        }
+        for(String x:crispProductNames()) if(!x.isEmpty()) all.putIfAbsent(x,"Crisp");''')
+
+mainText = mainText.replace('Selecteer wat je echt naar AH wilt sturen', 'Verdeel je boodschappen over AH en Crisp')
+mainText = mainText.replace('Alleen aangevinkte artikelen worden naar Albert Heijn gestuurd.', 'Aangevinkte artikelen worden per winkel gesplitst. Crisp-voorkeursproducten gaan niet naar AH.')
+
+mainText = mainText.replace('''        Button ahBtn=primary(ah.isConnected()?"🛒  0 geselecteerd naar AH":"🔗  Koppel eerst Albert Heijn");''', '''        Button ahBtn=primary(ah.isConnected()?"🛒  0 geselecteerd naar AH":"🔗  Koppel eerst Albert Heijn");
+        Button crispBtn=secondary("🥬  0 geselecteerd voor Crisp");''')
+
+mainText = mainText.replace('''            int n=0; for(CheckBox cb:checks) if(cb.isChecked()) n++;
+            counter.setText(n+" geselecteerd");
+            if(ah.isConnected()) ahBtn.setText("🛒  "+n+" geselecteerd naar AH");
+            ahBtn.setEnabled(!ah.isConnected() || n>0);
+            ahBtn.setAlpha((!ah.isConnected() || n>0)?1f:0.45f);''', '''            int n=0,ahN=0,crispN=0;
+            for(int i=0;i<checks.size();i++) if(checks.get(i).isChecked()){
+                n++;
+                if(isCrispProduct(names.get(i))) crispN++; else ahN++;
+            }
+            counter.setText(n+" geselecteerd • AH "+ahN+" • Crisp "+crispN);
+            if(ah.isConnected()) ahBtn.setText("🛒  "+ahN+" geselecteerd naar AH");
+            crispBtn.setText("🥬  "+crispN+" geselecteerd voor Crisp");
+            ahBtn.setEnabled(!ah.isConnected() || ahN>0);
+            ahBtn.setAlpha((!ah.isConnected() || ahN>0)?1f:0.45f);
+            crispBtn.setEnabled(crispN>0);
+            crispBtn.setAlpha(crispN>0?1f:0.45f);''')
+
+mainText = mainText.replace('''            List<String> selected=new ArrayList<>();
+            for(int i=0;i<checks.size();i++) if(checks.get(i).isChecked()) selected.add(names.get(i));''', '''            List<String> selected=new ArrayList<>();
+            for(int i=0;i<checks.size();i++) if(checks.get(i).isChecked() && !isCrispProduct(names.get(i))) selected.add(names.get(i));''')
+
+mainText = mainText.replace('''        updateCount.run();
+        content.addView(ahBtn);
+    }
+
+    private void showAh()''', '''        crispBtn.setOnClickListener(v->{
+            List<String> selected=new ArrayList<>();
+            for(int i=0;i<checks.size();i++) if(checks.get(i).isChecked() && isCrispProduct(names.get(i))) selected.add(names.get(i));
+            if(selected.isEmpty()){Toast.makeText(this,"Selecteer eerst minimaal één Crisp-artikel",Toast.LENGTH_SHORT).show();return;}
+            showCrispList(selected);
+        });
+        updateCount.run();
+        content.addView(ahBtn);
+        content.addView(crispBtn);
+    }
+
+    private List<String> crispProductNames(){
+        ArrayList<String> out=new ArrayList<>();
+        String raw=prefs.getString("crisp_products","''' + crispDefaults + '''");
+        for(String x:raw.split(",")){String t=x.trim();if(!t.isEmpty())out.add(t);}
+        return out;
+    }
+
+    private boolean isCrispProduct(String name){
+        String n=name==null?"":name.trim().toLowerCase();
+        for(String x:crispProductNames()) if(n.equals(x.toLowerCase())) return true;
+        return false;
+    }
+
+    private void showCrispList(List<String> selected){
+        StringBuilder sb=new StringBuilder();
+        for(String s:selected) sb.append("• ").append(s).append("\\n");
+        new AlertDialog.Builder(this)
+                .setTitle("Crisp-boodschappen")
+                .setMessage(sb.toString().trim()+"\\n\\nCrisp heeft geen gedocumenteerde consumenten-API waarmee MT Food betrouwbaar het mandje extern kan vullen. De lijst staat daarom apart klaar en MT Food opent de officiële Crisp-app.")
+                .setPositiveButton("Open Crisp",(d,w)->openCrisp())
+                .setNeutralButton("Kopieer lijst",(d,w)->{
+                    android.content.ClipboardManager cm=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+                    cm.setPrimaryClip(android.content.ClipData.newPlainText("Crisp boodschappen",sb.toString().trim()));
+                    Toast.makeText(this,"Crisp-lijst gekopieerd",Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Sluiten",null).show();
+    }
+
+    private void openCrisp(){
+        try{
+            Intent i=getPackageManager().getLaunchIntentForPackage("com.freshfoodventures.crisp");
+            if(i!=null) startActivity(i); else startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://crisp.nl/app")));
+        }catch(Exception e){startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse("https://crisp.nl/app")));}
+    }
+
+    private void showAh()''')
+
+mainText = mainText.replace('''        content.addView(section("Favorieten"));
+        EditText fav=input("Favoriete gerechten/producten",prefs.getString("favorites","Knorr Kip Madras, Mexicaanse wraps, Kinder Bueno"));''', '''        content.addView(section("Crisp"));
+        EditText crispProducts=input("Crisp-voorkeursproducten (komma's)",prefs.getString("crisp_products","''' + crispDefaults + '''"));
+        content.addView(crispProducts);
+        content.addView(text("Deze artikelen worden aan de Crisp-lijst toegewezen en nooit naar AH gestuurd.",12,false,MUTED));
+        Button openCrispSettings=secondary("Open Crisp-app");
+        openCrispSettings.setOnClickListener(v->openCrisp());
+        content.addView(openCrispSettings);
+
+        content.addView(section("Favorieten"));
+        EditText fav=input("Favoriete gerechten/producten",prefs.getString("favorites","Knorr Kip Madras, Mexicaanse wraps, Kinder Bueno"));''')
+
+mainText = mainText.replace('''        fav.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("favorites",normalizeList(fav.getText().toString())).commit();}});''', '''        crispProducts.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("crisp_products",normalizeList(crispProducts.getText().toString())).commit();}});
+        fav.setOnFocusChangeListener((v,has)->{if(!has){prefs.edit().putString("favorites",normalizeList(fav.getText().toString())).commit();}});''')
+
+mainText = mainText.replace('''.putString("favorites",normalizeList(fav.getText().toString()))''', '''.putString("crisp_products",normalizeList(crispProducts.getText().toString()))
+                    .putString("favorites",normalizeList(fav.getText().toString()))''')
+
+mainText = mainText.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v1.6')
+mainText = mainText.replace('Jullie complete eetweek • fruitvariatie, profielen & apparatuur', 'Jullie complete eetweek • AH + Crisp • fruitvariatie & profielen')
+
+if(!mainText.contains('crisp_products') || !mainText.contains('openCrisp()') || !mainText.contains('Crisp-boodschappen')) throw new GradleException('v1.6 Crisp UI wiring failed')
+mainActivity.write(mainText,'UTF-8')
+
+// Crisp-specific dinner recipes.
+def plannerText = plannerFile.getText('UTF-8')
+def crispRecipes = '''
+        recipes.add(new Recipe("crisp-duck","Gegaarde eendenbout met rodekool, appel en aardappelpuree","🦆","AVG",35,"Crisp-eendenbout met klassieke groente en puree.","balanced protein vegetables crisp oven",
+                L(I("eendenbout gegaard","1 p.p.",false),I("rodekool","180 g p.p.",false),I("appel","½ p.p.",false),I("aardappelen","220 g p.p.",false),I("melk","40 ml p.p.",false),I("nootmuskaat","snuf",true)),
+                "Verwarm de gegaarde eendenbout volgens verpakking, bij voorkeur in de oven.","Stoof rodekool met appel.","Maak aardappelpuree en serveer samen."));
+        recipes.add(new Recipe("crisp-sukade","Gegaarde sukade met geroosterde wortel, pastinaak en krieltjes","🥩","AVG",35,"Malse gegaarde sukade met geroosterde wintergroente.","balanced protein vegetables crisp oven",
+                L(I("sukade gegaard","160 g p.p.",false),I("wortel","120 g p.p.",false),I("pastinaak","120 g p.p.",false),I("krieltjes","220 g p.p.",false),I("tijm","1 tl",false),I("olijfolie","1 tl p.p.",true)),
+                "Rooster wortel, pastinaak en krieltjes met tijm.","Warm de gegaarde sukade rustig door.","Serveer met de geroosterde groente."));
+        recipes.add(new Recipe("crisp-lamb","Lamsschenkel met tomaat, kikkererwten en couscous","🍖","Anders",40,"Langzaam gegaarde lamsschenkel in mediterrane stijl.","med balanced protein vegetables legume crisp",
+                L(I("lamsschenkel","1 p.p.",false),I("tomatenblokjes","150 g p.p.",false),I("kikkererwten","80 g p.p.",false),I("wortel","100 g p.p.",false),I("volkoren couscous","65 g p.p.",false),I("komijn","1 tl",false)),
+                "Gaar of verwarm de lamsschenkel volgens verpakking.","Laat tomaat, wortel, kikkererwten en komijn zacht stoven.","Maak couscous en serveer alles samen."));
+'''
+plannerText = plannerText.replaceFirst(/(?s)\n    }\n}\s*$/, '\n' + crispRecipes + '    }\n}\n')
+if(!plannerText.contains('crisp-duck') || !plannerText.contains('crisp-sukade') || !plannerText.contains('crisp-lamb')) throw new GradleException('v1.6 Crisp recipes injection failed')
+plannerFile.write(plannerText,'UTF-8')
+
+android.defaultConfig.versionCode = 16
+android.defaultConfig.versionName = '1.6.0'

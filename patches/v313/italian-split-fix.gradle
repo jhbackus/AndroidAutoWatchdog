@@ -1,0 +1,9 @@
+// MT Food v3.13 hotfix: correct regex escaping for Italian ingredient separator.
+def ahProject=file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile=file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!plannerFile.exists()) throw new GradleException('v3.13 split fix: PlannerEngine missing')
+def p=plannerFile.getText('UTF-8')
+// The v3.13 generator produced Java split("\|") which is an illegal Java escape.
+p=p.replace('split("\\|")','split("\\\\|")')
+if(!p.contains('split("\\\\|")')) throw new GradleException('v3.13 split fix failed')
+plannerFile.write(p,'UTF-8')

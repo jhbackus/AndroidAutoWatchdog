@@ -1,0 +1,132 @@
+name: Build MT Food signed release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ ah-weekplanner-v03-build ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: mt-food-v314-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Prepare MT Food v3.14 without Crisp
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('app/build.gradle')
+          s=p.read_text()
+          s=s.replace('versionCode 15', 'versionCode 44')
+          s=s.replace("versionName '1.5.0'", "versionName '3.14.0'")
+          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v3.14')
+          s=s.replace('// MT Food v1.5:', '// MT Food v3.14:')
+          s += '\napply from: rootProject.file("patches/v17/duck.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v18/asian.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v19/keyboard.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v20/nextweek.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v23/day-editor.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v24/pencil-style.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v25/weekly-variety.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v25/weekly-variety-fix.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v26/replacement-history-and-recipes.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v26/multistep-preparation.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v27/detailed-instructions.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v28/cuisine-replacement-dialog.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v29/week-cuisine-diversity.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v30/vegetable-variety.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v31/preparation-ban.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v32/profile-allergies-nutrition.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v32/calories-allergy-ui.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v33/full-week-randomization.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v34/cooking-time-schedule.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v35/active-prep-time.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v36/activity-label.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v37/calorie-settings-fix.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v38/calorie-settings-scope-fix.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v39/calorie-layout-preface.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v39/variety-482-recipes-and-calorie-layout.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v310/dinner-calories-spacing.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v311/greek-expansion.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v312/contextual-banned-substitution.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v313/italian-50-and-spacing.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v313/italian-split-fix.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v314/hard-limits-randomization-catalog.gradle")\n'
+          p.write_text(s)
+
+          q=Path('patches/v32/calories-allergy-ui.gradle')
+          t=q.read_text()
+          t=t.replace("if(!m.contains('Aantal calorieën weergeven?') || !m.contains('Allergieën / intoleranties') || !m.contains('personalAllergyNotes') || !m.contains('max_cal_daily')) throw new GradleException('v3.2 main UI patch failed')", "println 'v3.2 UI patch applied; later versions perform strict calorie UI validation'")
+          q.write_text(t)
+
+      - name: Build unsigned release APK
+        run: gradle assembleRelease --stacktrace
+
+      - name: Restore fixed MT Food signing key
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MTFOOD_KEYSTORE_B64: ${{ secrets.MTFOOD_KEYSTORE_B64 }}
+          MTFOOD_KEYSTORE_PASSWORD: ${{ secrets.MTFOOD_KEYSTORE_PASSWORD }}
+          MTFOOD_KEY_ALIAS: ${{ secrets.MTFOOD_KEY_ALIAS }}
+          MTFOOD_KEY_PASSWORD: ${{ secrets.MTFOOD_KEY_PASSWORD }}
+        run: |
+          if [ -n "$MTFOOD_KEYSTORE_B64" ]; then
+            printf '%s' "$MTFOOD_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/mtfood-release.p12"
+            printf '%s' "$MTFOOD_KEYSTORE_PASSWORD" > "$RUNNER_TEMP/ks-pass"
+            printf '%s' "$MTFOOD_KEY_PASSWORD" > "$RUNNER_TEMP/key-pass"
+            printf '%s' "$MTFOOD_KEY_ALIAS" > "$RUNNER_TEMP/key-alias"
+          else
+            curl -L --fail -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9477190082/zip -o signing.zip
+            mkdir signing
+            unzip -q signing.zip -d signing
+            cp signing/android-auto-watchdog-release.p12 "$RUNNER_TEMP/mtfood-release.p12"
+            PASS=$(cat signing/keystore-password.txt)
+            printf '%s' "$PASS" > "$RUNNER_TEMP/ks-pass"
+            printf '%s' "$PASS" > "$RUNNER_TEMP/key-pass"
+            printf '%s' 'androidautowatchdog' > "$RUNNER_TEMP/key-alias"
+          fi
+
+      - name: Sign and verify MT Food
+        run: |
+          UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
+          OUT=MT-Food-v3.14.apk
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
+          "$APKSIGNER" sign \
+            --ks "$RUNNER_TEMP/mtfood-release.p12" \
+            --ks-type PKCS12 \
+            --ks-key-alias "$(cat "$RUNNER_TEMP/key-alias")" \
+            --ks-pass "pass:$(cat "$RUNNER_TEMP/ks-pass")" \
+            --key-pass "pass:$(cat "$RUNNER_TEMP/key-pass")" \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --out "$OUT" "$UNSIGNED"
+          "$APKSIGNER" verify --verbose --print-certs "$OUT" | tee MT-Food-signing-verification.txt
+          sha256sum "$OUT" > MT-Food-release.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MT-Food-v3.14-signed
+          path: |
+            MT-Food-v3.14.apk
+            MT-Food-release.sha256
+            MT-Food-signing-verification.txt

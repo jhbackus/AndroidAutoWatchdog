@@ -1,0 +1,49 @@
+// MT Food v3.9 preface: make calorie display deterministic before the large recipe expansion patch.
+def ahProject=file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainFile=file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!mainFile.exists()) throw new GradleException('v3.9 preface: MainActivity missing')
+def m=mainFile.getText('UTF-8')
+
+// 1) Never show kcal for a meal with zero portions. Replace the complete calText assignment,
+// independent of whitespace or earlier patch formatting.
+m=m.replaceAll(/String calText\s*=\s*[^;]+;/,
+        'String calText=(count>0 && prefs.getBoolean("show_calories",false))?"  •  ≈"+cal+" kcal p.p.":"";')
+
+// 2) Remove the old day total between lunch and dinner, regardless of minor whitespace changes.
+m=m.replaceAll(/(?s)\s*if\(prefs\.getBoolean\("show_calories",false\)\)\s*\{\s*int dayCal\s*=\s*NutritionEstimator\.estimateTextMeal\(breakfast,true\)\s*\+\s*NutritionEstimator\.estimateTextMeal\(lunch,false\)\s*\+\s*NutritionEstimator\.estimateRecipeCalories\(m\.ingredients\);\s*c\.addView\(text\("≈ "\+dayCal\+" kcal totaal • volwassen portie",12,true,GREEN\)\);\s*\}\s*(?=LinearLayout dinner)/,'\n        ')
+
+// 3) Add the day total immediately after the dinner view is added. Do not depend on the
+// exact click-handler syntax because the day-editor patch wraps that handler conditionally.
+if(!m.contains('Dagtotaal ≈')){
+    String dinnerMarker='        c.addView(dinner);'
+    int dinnerAt=m.indexOf(dinnerMarker)
+    if(dinnerAt<0) throw new GradleException('v3.9 preface: dinner view marker missing')
+    int insertAt=dinnerAt+dinnerMarker.length()
+    String total='''
+        if(prefs.getBoolean("show_calories",false)){
+            int dayCal=0;
+            if(breakfastCount>0) dayCal+=NutritionEstimator.estimateTextMeal(breakfast,true);
+            if(lunchCount>0) dayCal+=NutritionEstimator.estimateTextMeal(lunch,false);
+            if(dinnerCount>0) dayCal+=NutritionEstimator.estimateRecipeCalories(m.ingredients);
+            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,true,GREEN));
+        }'''
+    m=m.substring(0,insertAt)+total+m.substring(insertAt)
+}
+
+// 4) Remove dinner kcal from the recipe hero and put it immediately before Bereiding.
+m=m.replaceAll(/\s*if\(prefs\.getBoolean\("show_calories",false\)\)\s*hero\.addView\(chip\("≈ "\+NutritionEstimator\.estimateRecipeCalories\(m\.ingredients\)\+" kcal per volwassen portie"\)\);/,'')
+String kcalMarker='content.addView(text("≈ "+NutritionEstimator.estimateRecipeCalories(m.ingredients)+" kcal per volwassen portie",14,true,GREEN));'
+if(!m.contains(kcalMarker)){
+    int prepAt=m.indexOf('        content.addView(section("Bereiding"));')
+    if(prepAt<0) throw new GradleException('v3.9 preface: Bereiding marker missing')
+    String kcal='''        if(prefs.getBoolean("show_calories",false))
+            content.addView(text("≈ "+NutritionEstimator.estimateRecipeCalories(m.ingredients)+" kcal per volwassen portie",14,true,GREEN));
+'''
+    m=m.substring(0,prepAt)+kcal+m.substring(prepAt)
+}
+
+// Validate the resulting behavior, not an exact formatting variant.
+if(!m.contains('count>0 && prefs.getBoolean("show_calories",false)')) throw new GradleException('v3.9 preface: empty-meal kcal suppression missing')
+if(!m.contains('Dagtotaal ≈')) throw new GradleException('v3.9 preface: day total missing')
+if(!m.contains(kcalMarker)) throw new GradleException('v3.9 preface: dinner kcal below ingredients missing')
+mainFile.write(m,'UTF-8')

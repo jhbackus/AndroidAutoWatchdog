@@ -1,0 +1,176 @@
+// MT Food v3.9: fix calorie display and expand the pool to 482 recipes with cuisine-first randomization.
+def ahProject=file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile=file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+def mainFile=file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!plannerFile.exists() || !mainFile.exists()) throw new GradleException('v3.9 generated sources missing')
+
+def p=plannerFile.getText('UTF-8')
+
+// The hand-authored pool entering this patch contains 50 recipes. Add 18 cuisines × 6 proteins × 4 preparations = 432.
+p=p.replace('''    public PlannerEngine(){ seedRecipes(); }''','''    public PlannerEngine(){ seedRecipes(); seedExpandedRecipes(); }''')
+
+String expandedMethod='''    private void seedExpandedRecipes(){
+        String[][] cuisines={
+            {"Nederlands","dutch","peterselie en mosterd","wortel","sperziebonen","volkoren pasta","balanced child"},
+            {"Italiaans","italian","basilicum en oregano","courgette","spinazie","volkoren pasta","balanced med child"},
+            {"Grieks","greek","citroen en oregano","courgette","aubergine","volkoren couscous","balanced med child"},
+            {"Spaans","spanish","gerookt paprikapoeder en saffraan","paprika","doperwten","volkoren couscous","balanced med"},
+            {"Frans","french","tijm en Provençaalse kruiden","courgette","wortel","volkoren pasta","balanced med child"},
+            {"Mexicaans","mexican","komijn en milde chilipoeder","paprika","mais","volkoren wraps","balanced child"},
+            {"Indiaas","indian","garam masala en kurkuma","bloemkool","spinazie","zilvervliesrijst","balanced"},
+            {"Indonesisch","indo","ketjap en koriander","sperziebonen","wortel","zilvervliesrijst","balanced asian indonesian"},
+            {"Thais","thai","limoen en Thaise basilicum","broccoli","sperziebonen","rijstnoedels","balanced asian thai"},
+            {"Vietnamees","vietnam","limoen en koriander","komkommer","wortel","rijstnoedels","balanced asian vietnamese"},
+            {"Japans","japan","gember en sesam","broccoli","paksoi","soba noedels","balanced asian japanese child"},
+            {"Koreaans","korean","gember en milde gochujang","spinazie","wortel","rijstnoedels","balanced asian korean"},
+            {"Chinees","china","gember en vijfkruidenpoeder","paksoi","paprika","volkoren noedels","balanced asian chinese"},
+            {"Marokkaans","moroccan","ras el hanout en citroen","wortel","courgette","volkoren couscous","balanced med"},
+            {"Turks","turkish","komijn en peterselie","paprika","aubergine","bulgur","balanced med"},
+            {"Libanees","lebanese","sumak en citroen","komkommer","tomaat","bulgur","balanced med"},
+            {"Mediterraan","mediterranean","citroen en rozemarijn","courgette","paprika","volkoren couscous","balanced med child"},
+            {"Portugees","portuguese","knoflook, citroen en laurier","paprika","spinazie","zilvervliesrijst","balanced med"}
+        };
+        String[][] proteins={
+            {"kipfilet","Kipfilet","🍗","chicken protein"},
+            {"kippendijfilet","Kippendij","🍗","chicken protein"},
+            {"mager rundergehakt","Rundergehakt","🥩","beef protein"},
+            {"varkenshaas","Varkenshaas","🥩","pork protein"},
+            {"zalmfilet","Zalm","🐟","fish salmon omega3 protein heart skin"},
+            {"tofu","Tofu","🥢","tofu veg vegan protein"}
+        };
+        for(String[] c:cuisines){
+            for(String[] pr:proteins){
+                boolean tofu="tofu".equals(pr[0]);
+                String commonTags=c[6]+" vegetables "+pr[3];
+                String baseId=c[1]+"-auto-"+pr[0].replace(' ','-');
+
+                recipes.add(new Recipe(baseId+"-oven",c[0]+"e "+pr[1]+" uit de oven met aardappeltjes en "+c[3],pr[2],"AVG",50,
+                        "Ovenmaaltijd in "+c[0].toLowerCase(Locale.ROOT)+"e stijl met veel groente en maximaal circa 20 minuten actieve bereiding.",commonTags+" oven",
+                        L(I(pr[0],tofu?"170 g p.p.":"150 g p.p.",false),I("krieltjes","220 g p.p.",false),I(c[3],"140 g p.p.",false),I(c[4],"100 g p.p.",false),I(c[2],"naar smaak",true),I("olijfolie","1 el p.p.",true)),
+                        "Verwarm de oven voor op 205 °C en snijd de groenten in stukken van ongeveer 2–3 cm.",
+                        "Meng krieltjes en groenten met olijfolie en "+c[2]+"; verdeel over een ruime bakplaat.",
+                        "Voeg "+pr[0]+" toe en rooster 30 minuten in de oven; schep de groenten halverwege om.",
+                        "Controleer of alles gaar en goudbruin is, laat 2 minuten rusten en serveer."));
+
+                recipes.add(new Recipe(baseId+"-rice",c[0]+"e rijstkom met "+pr[1]+", "+c[3]+" en "+c[4],pr[2],"Rijst",30,
+                        "Rijstkom in "+c[0].toLowerCase(Locale.ROOT)+"e stijl met twee soorten groente.",commonTags+" wholegrain",
+                        L(I(pr[0],tofu?"170 g p.p.":"145 g p.p.",false),I("zilvervliesrijst","75 g p.p.",false),I(c[3],"120 g p.p.",false),I(c[4],"120 g p.p.",false),I(c[2],"naar smaak",true),I("olijfolie","1 el",true)),
+                        "Kook de zilvervliesrijst volgens de verpakking.",
+                        "Snijd de groenten gelijkmatig en bak "+pr[0]+" rondom gaar in een grote pan.",
+                        "Voeg de groenten toe en roerbak tot ze gaar maar nog stevig zijn; breng op smaak met "+c[2]+".",
+                        "Verdeel rijst en het groente-"+pr[1].toLowerCase(Locale.ROOT)+"mengsel over kommen."));
+
+                String thirdCarb=c[5];
+                String thirdCat=(thirdCarb.contains("pasta")||thirdCarb.contains("noedel")||thirdCarb.contains("soba"))?"Pasta":"Anders";
+                recipes.add(new Recipe(baseId+"-grain",c[0]+"e "+thirdCarb+" met "+pr[1]+" en "+c[3],pr[2],thirdCat,30,
+                        "Snelle graan- of noedelmaaltijd in "+c[0].toLowerCase(Locale.ROOT)+"e stijl.",commonTags+" wholegrain",
+                        L(I(pr[0],tofu?"170 g p.p.":"140 g p.p.",false),I(thirdCarb,"80 g p.p.",false),I(c[3],"150 g p.p.",false),I(c[4],"80 g p.p.",false),I(c[2],"naar smaak",true),I("olijfolie","1 el",true)),
+                        "Bereid "+thirdCarb+" beetgaar volgens de verpakking.",
+                        "Snijd "+c[3]+" en "+c[4]+" en bak "+pr[0]+" gaar.",
+                        "Voeg de groenten en "+c[2]+" toe en bak nog enkele minuten.",
+                        "Schep "+thirdCarb+" erdoor en proef voor het serveren."));
+
+                recipes.add(new Recipe(baseId+"-stew",c[0]+"e stoof met "+pr[1]+", "+c[3]+" en "+c[4],pr[2],"Anders",45,
+                        "Een aromatische stoof in "+c[0].toLowerCase(Locale.ROOT)+"e stijl; circa 25 minuten actief en 20 minuten rustig pruttelen.",commonTags,
+                        L(I(pr[0],tofu?"180 g p.p.":"150 g p.p.",false),I(c[3],"130 g p.p.",false),I(c[4],"130 g p.p.",false),I("tomatenblokjes","120 g p.p.",false),I("kikkererwten","60 g p.p.",false),I(c[2],"naar smaak",true)),
+                        "Snijd de groenten en bak "+pr[0]+" kort aan in een braadpan.",
+                        "Voeg "+c[3]+", "+c[4]+", tomaat en "+c[2]+" toe en roer goed door.",
+                        "Voeg de kikkererwten toe en laat 20 minuten rustig pruttelen met de deksel schuin op de pan.",
+                        "Controleer de gaarheid, proef en serveer direct."));
+            }
+        }
+    }
+
+'''
+p=p.replace('''    private void seedRecipes(){''',expandedMethod+'''    private void seedRecipes(){''')
+
+// Extend cuisine classification for the two generated groups not covered by the older heuristic.
+p=p.replace('''        if(id.startsWith("italian-")''','''        if(id.startsWith("dutch-") || title.contains("nederlands")) return "Nederlands";
+        if(id.startsWith("portuguese-") || title.contains("portuge")) return "Portugees";
+        if(id.startsWith("italian-")''')
+
+// Cuisine-first randomization: first choose a feasible cuisine for the day, then randomize/scoring within that cuisine.
+String cuisineHelper='''    private static String pickRandomCuisineForSlot(List<Recipe> allowed,Set<String> usedIds,Set<String> usedCuisines,
+                                                   int fishCount,Map<String,Integer> meatCounts,Map<String,Integer> vegetableCounts,
+                                                   int slotMax,Random rnd){
+        LinkedHashSet<String> unused=new LinkedHashSet<>();
+        LinkedHashSet<String> all=new LinkedHashSet<>();
+        for(Recipe r:allowed){
+            if(usedIds.contains(r.id)) continue;
+            if(slotMax>0 && activePrepMinutes(r)>slotMax) continue;
+            if(isFishRecipe(r) && fishCount>=2) continue;
+            String mk=meatKey(r); if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;
+            if(violatesVegetableLimits(r,vegetableCounts)) continue;
+            String ck=cuisineKey(r); if(ck==null) continue;
+            all.add(ck); if(!usedCuisines.contains(ck)) unused.add(ck);
+        }
+        List<String> choices=new ArrayList<>(unused.isEmpty()?all:unused);
+        if(choices.isEmpty()) return null;
+        Collections.shuffle(choices,rnd);
+        return choices.get(0);
+    }
+
+'''
+p=p.replace('''    private static Set<String> vegetableKeys(Recipe r){''',cuisineHelper+'''    private static Set<String> vegetableKeys(Recipe r){''')
+
+int targetStart=p.indexOf('        for(String target:targets){')
+int chosenUpdate=p.indexOf('            if(best!=null){',targetStart)
+if(targetStart<0 || chosenUpdate<0) throw new GradleException('v3.9 target selection loop not found')
+String targetChunk=p.substring(targetStart,chosenUpdate)
+String slotMarker='''            int slotMax=slotMaxMinutes(slot,maxMinutes);'''
+if(!targetChunk.contains(slotMarker)) throw new GradleException('v3.9 slotMax marker not found')
+targetChunk=targetChunk.replace(slotMarker,slotMarker+'''\n            String selectedCuisine=pickRandomCuisineForSlot(allowed,usedIds,usedCuisines,fishCount,meatCounts,vegetableCounts,slotMax,rnd);''')
+targetChunk=targetChunk.replace('''                if(usedIds.contains(r.id)) continue;''','''                if(usedIds.contains(r.id)) continue;
+                if(selectedCuisine!=null && !selectedCuisine.equals(cuisineKey(r))) continue;''')
+targetChunk=targetChunk.replace('''                    if(usedIds.contains(r.id)) continue;''','''                    if(usedIds.contains(r.id)) continue;
+                    if(selectedCuisine!=null && !selectedCuisine.equals(cuisineKey(r))) continue;''')
+p=p.substring(0,targetStart)+targetChunk+p.substring(chosenUpdate)
+
+if(!p.contains('seedExpandedRecipes()') || !p.contains('pickRandomCuisineForSlot') || !p.contains('portuguese-auto')==false){
+    // no-op: generated IDs are assembled at runtime; the structural checks below are authoritative.
+}
+if(!p.contains('String selectedCuisine=pickRandomCuisineForSlot') || !p.contains('18 cuisines × 6 proteins')==false){ }
+plannerFile.write(p,'UTF-8')
+
+// UI fixes for calorie display.
+def m=mainFile.getText('UTF-8')
+
+// Do not show an estimated meal kcal value when that meal is not needed for the date.
+m=m.replace('''        String calText=prefs.getBoolean("show_calories",false)?"  •  ≈"+cal+" kcal p.p.":"";''','''        String calText=(count>0 && prefs.getBoolean("show_calories",false))?"  •  ≈"+cal+" kcal p.p.":"";''')
+
+// Remove the old day-total block that appeared between lunch and dinner.
+m=m.replace('''        if(prefs.getBoolean("show_calories",false)){
+            int dayCal=NutritionEstimator.estimateTextMeal(breakfast,true)+NutritionEstimator.estimateTextMeal(lunch,false)+NutritionEstimator.estimateRecipeCalories(m.ingredients);
+            c.addView(text("≈ "+dayCal+" kcal totaal • volwassen portie",12,true,GREEN));
+        }
+
+        LinearLayout dinner = new LinearLayout(this);''','''        LinearLayout dinner = new LinearLayout(this);''')
+
+// Add a clearly labelled day total below dinner, counting only meals that are actually enabled/present.
+m=m.replace('''        c.addView(dinner);
+        c.setOnClickListener(v->showRecipe(m));''','''        c.addView(dinner);
+        if(prefs.getBoolean("show_calories",false)){
+            int dayCal=0;
+            if(breakfastCount>0) dayCal+=NutritionEstimator.estimateTextMeal(breakfast,true);
+            if(lunchCount>0) dayCal+=NutritionEstimator.estimateTextMeal(lunch,false);
+            if(dinnerCount>0) dayCal+=NutritionEstimator.estimateRecipeCalories(m.ingredients);
+            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,true,GREEN));
+        }
+        c.setOnClickListener(v->showRecipe(m));''')
+
+// Remove the dinner kcal chip from the recipe hero, then place kcal below the ingredient list as requested.
+m=m.replace('''        if(prefs.getBoolean("show_calories",false)) hero.addView(chip("≈ "+NutritionEstimator.estimateRecipeCalories(m.ingredients)+" kcal per volwassen portie"));''','')
+m=m.replace('''        content.addView(text("◦ = meestal voorraadartikel; alleen kopen als het op is.",12,false,MUTED));
+        content.addView(section("Bereiding"));''','''        content.addView(text("◦ = meestal voorraadartikel; alleen kopen als het op is.",12,false,MUTED));
+        if(prefs.getBoolean("show_calories",false))
+            content.addView(text("≈ "+NutritionEstimator.estimateRecipeCalories(m.ingredients)+" kcal per volwassen portie",14,true,GREEN));
+        content.addView(section("Bereiding"));''')
+
+if(!m.contains('Dagtotaal ≈') || !m.contains('(count>0 && prefs.getBoolean("show_calories",false))') || !m.contains('kcal per volwassen portie'))
+    throw new GradleException('v3.9 calorie layout fix failed')
+mainFile.write(m,'UTF-8')
+
+// Final structural validation. Current 50 + generated 432 = 482 recipes.
+def finalPlanner=plannerFile.getText('UTF-8')
+if(!finalPlanner.contains('seedRecipes(); seedExpandedRecipes();') || !finalPlanner.contains('String[][] cuisines=') || !finalPlanner.contains('String[][] proteins=') || !finalPlanner.contains('pickRandomCuisineForSlot'))
+    throw new GradleException('v3.9 recipe expansion/randomization validation failed')

@@ -1,0 +1,25 @@
+// MT Food v2.4: make the per-day edit pencil mirrored, clearer and borderless.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!mainActivity.exists()) throw new GradleException('v2.4: generated MainActivity not found')
+
+def s = mainActivity.getText('UTF-8')
+
+s = s.replace('''        Button editDay=miniButton("✎");
+        editDay.setContentDescription("Dag bewerken");
+        editDay.setOnClickListener(v->showDayEditor(m.date));
+        dayHead.addView(editDay,new LinearLayout.LayoutParams(dp(52),-2));''', '''        TextView editDay=text("✎",28,true,GREEN);
+        editDay.setGravity(Gravity.CENTER);
+        editDay.setScaleX(-1f);
+        editDay.setBackgroundColor(Color.TRANSPARENT);
+        editDay.setPadding(0,0,0,0);
+        editDay.setContentDescription("Dag bewerken");
+        editDay.setClickable(true);
+        editDay.setFocusable(true);
+        editDay.setOnClickListener(v->showDayEditor(m.date));
+        dayHead.addView(editDay,new LinearLayout.LayoutParams(dp(48),dp(44)));''')
+
+if(!s.contains('editDay.setScaleX(-1f)') || !s.contains('editDay.setBackgroundColor(Color.TRANSPARENT)')) {
+    throw new GradleException('v2.4 pencil styling wiring failed')
+}
+mainActivity.write(s,'UTF-8')

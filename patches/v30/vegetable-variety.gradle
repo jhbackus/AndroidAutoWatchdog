@@ -1,0 +1,65 @@
+// MT Food v3.0: hard weekly vegetable variety limits.
+def ahProject=file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def f=file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!f.exists()) throw new GradleException('v3.0 PlannerEngine missing')
+def s=f.getText('UTF-8')
+
+// Full-week counters.
+s=s.replace('Map<String,Integer> meatCounts=new HashMap<>();\n        int fishCount=0;', 'Map<String,Integer> meatCounts=new HashMap<>();\n        Map<String,Integer> vegetableCounts=new HashMap<>();\n        int fishCount=0;')
+
+// Every candidate that already passed meat limits must also pass vegetable limits.
+s=s.replace('if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;\n                String ck=cuisineKey(r);', 'if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;\n                if(violatesVegetableLimits(r,vegetableCounts)) continue;\n                String ck=cuisineKey(r);')
+s=s.replace('if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;\n                    String ck=cuisineKey(r);', 'if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;\n                    if(violatesVegetableLimits(r,vegetableCounts)) continue;\n                    String ck=cuisineKey(r);')
+
+// Count selected vegetables.
+s=s.replace('String mk=meatKey(best); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);\n                String ck=cuisineKey(best);', 'String mk=meatKey(best); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);\n                addVegetableCounts(best,vegetableCounts);\n                String ck=cuisineKey(best);')
+s=s.replace('String mk=meatKey(extra); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);\n            String ck=cuisineKey(extra);', 'String mk=meatKey(extra); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);\n            addVegetableCounts(extra,vegetableCounts);\n            String ck=cuisineKey(extra);')
+
+// Cuisine feasibility helper also needs the vegetable limits.
+s=s.replace('int fishCount,Map<String,Integer> meatCounts){', 'int fishCount,Map<String,Integer> meatCounts,Map<String,Integer> vegetableCounts){')
+s=s.replace('hasUnusedCuisineCandidate(allowed,usedIds,usedCuisines,fishCount,meatCounts)', 'hasUnusedCuisineCandidate(allowed,usedIds,usedCuisines,fishCount,meatCounts,vegetableCounts)')
+s=s.replace('String mk=meatKey(x);\n            if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;\n            String ck=cuisineKey(x);', 'String mk=meatKey(x);\n            if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;\n            if(violatesVegetableLimits(x,vegetableCounts)) continue;\n            String ck=cuisineKey(x);')
+
+// Replacement counts vegetables in the other active dinners too.
+s=s.replace('int fishCount=0;\n        Map<String,Integer> meatCounts=new HashMap<>();\n        Set<String> usedTitles=', 'int fishCount=0;\n        Map<String,Integer> meatCounts=new HashMap<>();\n        Map<String,Integer> vegetableCounts=new HashMap<>();\n        Set<String> usedTitles=')
+s=s.replace('String mk=meatKey(rr); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);\n                String pt=', 'String mk=meatKey(rr); if(mk!=null) meatCounts.put(mk,meatCounts.getOrDefault(mk,0)+1);\n                addVegetableCounts(rr,vegetableCounts);\n                String pt=')
+s=s.replace('if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;\n            double sc=score(', 'if(mk!=null && meatCounts.getOrDefault(mk,0)>=1) continue;\n            if(violatesVegetableLimits(r,vegetableCounts)) continue;\n            double sc=score(')
+
+// Vegetable classification. Tomato, onion and garlic are intentionally exempt; paprika gets 3, all others 2.
+def helpers='''    private static Set<String> vegetableKeys(Recipe r){
+        Set<String> out=new LinkedHashSet<>();
+        for(Ingredient i:r.ingredients){
+            String n=i.name.toLowerCase(Locale.ROOT);
+            if(n.contains("tomaat")||n.contains("tomaten")||n.contains("passata")||n.contains("ui")||n.contains("knoflook")) continue;
+            if(n.contains("paprikapoeder")) continue;
+            if(n.contains("paprika")) out.add("paprika");
+            else if(n.contains("spinazie")) out.add("spinazie");
+            else if(n.contains("broccoli")) out.add("broccoli");
+            else if(n.contains("bloemkool")) out.add("bloemkool");
+            else if(n.contains("courgette")) out.add("courgette");
+            else if(n.contains("wortel")) out.add("wortel");
+            else if(n.contains("sperziebon")) out.add("sperziebonen");
+            else if(n.contains("aubergine")) out.add("aubergine");
+            else if(n.contains("paksoi")) out.add("paksoi");
+            else if(n.contains("prei")) out.add("prei");
+            else if(n.contains("komkommer")) out.add("komkommer");
+            else if(n.contains("doperwt")) out.add("doperwten");
+            else if(n.contains("rodekool")) out.add("rodekool");
+            else if(n.contains("venkel")) out.add("venkel");
+            else if(n.contains("sla")) out.add("sla");
+        }
+        return out;
+    }
+    private static int vegetableLimit(String key){ return "paprika".equals(key)?3:2; }
+    private static boolean violatesVegetableLimits(Recipe r,Map<String,Integer> counts){
+        for(String k:vegetableKeys(r)) if(counts.getOrDefault(k,0)>=vegetableLimit(k)) return true;
+        return false;
+    }
+    private static void addVegetableCounts(Recipe r,Map<String,Integer> counts){
+        for(String k:vegetableKeys(r)) counts.put(k,counts.getOrDefault(k,0)+1);
+    }
+
+'''
+s=s.replace('    private static String cuisineKey(Recipe r){', helpers+'    private static String cuisineKey(Recipe r){')
+if(!s.contains('vegetableLimit(String key)')||!s.contains('addVegetableCounts(best,vegetableCounts)')) throw new GradleException('v3.0 vegetable patch failed')
+f.write(s,'UTF-8')

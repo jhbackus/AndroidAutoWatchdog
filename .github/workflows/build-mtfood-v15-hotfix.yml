@@ -1,0 +1,37 @@
+name: Build MT Food v1.5 hotfix
+
+on:
+  push:
+    branches: [ah-weekplanner-v03-build]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Fix v1.5 breakfast replacement scope
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('app/build.gradle')
+          s=p.read_text()
+          old='''mainText = mainText.replace('String breakfast=prefs.getString(\"breakfast\",\"yoghurt / kwark, havermout, blauwe bessen\");',\n        'String breakfast=breakfastForDate(m.date);')'''
+          new='''mainText = mainText.replace(''' + "'''" + '''        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);\n        String breakfast=prefs.getString(\"breakfast\",\"yoghurt / kwark, havermout, blauwe bessen\");''' + "'''" + ''',\n''' + "'''" + '''        int dinnerCount=household.count(m.date,HouseholdManager.DINNER);\n        String breakfast=breakfastForDate(m.date);''' + "'''" + ''')'''
+          if old not in s:
+              raise SystemExit('Expected v1.5 replacement not found')
+          p.write_text(s.replace(old,new))
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MT-Food-v1.5-debug
+          path: app/build/outputs/apk/debug/*.apk

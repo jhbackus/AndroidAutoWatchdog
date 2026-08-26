@@ -1,0 +1,45 @@
+// MT Food v1.8: broaden Asian recipe rotation. Explicitly excludes miso cod and beef bowl.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!plannerFile.exists()) throw new GradleException('v1.8: PlannerEngine not found')
+
+def plannerText = plannerFile.getText('UTF-8')
+def asianRecipes = '''
+        recipes.add(new Recipe("indo-nasi","Nasi goreng met kip, ei en veel groente","🍳","Rijst",30,"Indonesisch geïnspireerde nasi met kip, ei, prei, wortel en sperziebonen.","balanced asian indonesian protein vegetables chicken egg child",
+                L(I("zilvervliesrijst","75 g p.p.",false),I("kipfilet","120 g p.p.",false),I("ei","1 p.p.",false),I("prei","70 g p.p.",false),I("wortel","70 g p.p.",false),I("sperziebonen","100 g p.p.",false),I("ketjap manis","15 ml p.p.",false),I("sambal","naar smaak",true)),
+                "Kook de rijst en laat kort uitdampen.","Bak kip en groente gaar.","Schuif opzij, roerbak het ei en meng alles met rijst en ketjap.","Serveer sambal apart."));
+        recipes.add(new Recipe("indo-rendang-chicken","Indonesische kokos-kipstoof met sperziebonen en rijst","🥥","Rijst",40,"Milde rendang-geïnspireerde kipstoof met kokos, limoen en specerijen.","balanced asian indonesian protein vegetables chicken",
+                L(I("kipdijfilet","150 g p.p.",false),I("zilvervliesrijst","70 g p.p.",false),I("sperziebonen","180 g p.p.",false),I("lichte kokosmelk","100 ml p.p.",false),I("limoen","½ per 2 personen",false),I("rendangkruiden","1 el p.p.",false)),
+                "Bak de kip met rendangkruiden.","Voeg kokosmelk toe en laat zacht stoven.","Kook rijst en sperziebonen.","Werk de stoof af met limoen."));
+        recipes.add(new Recipe("thai-green-curry","Thaise groene curry met kip, broccoli en sperziebonen","🍛","Rijst",30,"Frisse groene curry met veel groente en een bescheiden hoeveelheid kokosmelk.","balanced asian thai protein vegetables chicken",
+                L(I("kipfilet","130 g p.p.",false),I("zilvervliesrijst","70 g p.p.",false),I("broccoli","120 g p.p.",false),I("sperziebonen","100 g p.p.",false),I("lichte kokosmelk","90 ml p.p.",false),I("groene currypasta","15 g p.p.",false),I("limoen","½ per 2 personen",false)),
+                "Kook de rijst.","Bak kip kort aan en voeg currypasta toe.","Voeg kokosmelk en groente toe en laat gaar worden.","Werk af met limoen."));
+        recipes.add(new Recipe("thai-krapao-chicken","Pad kra pao met kip, basilicum en sperziebonen","🌿","Rijst",25,"Thaise roerbak met kip, basilicum, knoflook en sperziebonen.","balanced asian thai protein vegetables chicken spicy",
+                L(I("kipgehakt","140 g p.p.",false),I("zilvervliesrijst","70 g p.p.",false),I("sperziebonen","180 g p.p.",false),I("Thaise basilicum","1 hand p.p.",false),I("knoflook","1 teen",true),I("sojasaus","15 ml p.p.",true),I("rode peper","naar smaak",false)),
+                "Kook de rijst.","Roerbak kipgehakt met knoflook en peper.","Voeg sperziebonen en sojasaus toe.","Schep basilicum er op het laatst door."));
+        recipes.add(new Recipe("japan-teriyaki-salmon","Japanse zalm teriyaki met rijst en broccoli","🍣","Rijst",25,"Zalm met teriyaki, broccoli en rijst; eenvoudig en kindvriendelijk.","balanced asian japanese heart skin menopause omega3 protein vegetables fish salmon child",
+                L(I("zalmfilet","150 g p.p.",false),I("zilvervliesrijst","70 g p.p.",false),I("broccoli","200 g p.p.",false),I("teriyakisaus","25 ml p.p.",false),I("sesamzaad","1 tl p.p.",false),I("lente-ui","½ p.p.",false)),
+                "Kook de rijst en stoom de broccoli.","Bak of oven-gaar de zalm.","Lak de zalm kort met teriyakisaus.","Serveer met sesam en lente-ui."));
+        recipes.add(new Recipe("japan-yakitori","Yakitori-kip met rijst, komkommer en wortel","🍢","Rijst",30,"Japanse kipspiesjes met een lichte sojaglaze en frisse groente.","balanced asian japanese protein vegetables chicken child",
+                L(I("kipdijfilet","150 g p.p.",false),I("zilvervliesrijst","70 g p.p.",false),I("komkommer","100 g p.p.",false),I("wortel","100 g p.p.",false),I("sojasaus","15 ml p.p.",true),I("honing","1 tl p.p.",true),I("sesamolie","½ tl p.p.",true)),
+                "Kook de rijst.","Rijg kip aan spiesjes en bak of grill gaar.","Lak met sojasaus, honing en sesamolie.","Serveer met komkommer en wortel."));
+        recipes.add(new Recipe("vietnam-noodle-bowl","Vietnamese noedelbowl met kip, komkommer en kruiden","🥢","Anders",25,"Frisse bowl met rijstnoedels, kip, komkommer, wortel en verse kruiden.","balanced asian vietnamese protein vegetables chicken",
+                L(I("rijstnoedels","70 g p.p.",false),I("kipfilet","130 g p.p.",false),I("komkommer","100 g p.p.",false),I("wortel","80 g p.p.",false),I("munt","1 hand",false),I("koriander","1 hand",false),I("limoen","½ p.p.",false),I("vissaus","10 ml p.p.",false)),
+                "Bereid de noedels.","Bak de kip en snijd in reepjes.","Verdeel noedels en groente over kommen.","Maak af met limoen, kruiden en een klein beetje vissaus."));
+        recipes.add(new Recipe("korean-chicken-bowl","Koreaanse kipbowl met rijst, spinazie en wortel","🌶️","Rijst",30,"Koreaanse stijl met gemarineerde kip en veel groente, pittigheid naar smaak.","balanced asian korean protein vegetables chicken spicy",
+                L(I("kipfilet","140 g p.p.",false),I("zilvervliesrijst","70 g p.p.",false),I("spinazie","120 g p.p.",false),I("wortel","100 g p.p.",false),I("gochujang","10 g p.p.",false),I("sojasaus","10 ml p.p.",true),I("sesamzaad","1 tl p.p.",false)),
+                "Kook de rijst.","Marineer kip met gochujang en sojasaus en bak gaar.","Roerbak spinazie en wortel kort.","Serveer als bowl met sesam."));
+        recipes.add(new Recipe("china-ginger-chicken","Chinese gemberkip met paksoi en rijst","🥬","Rijst",25,"Snelle roerbak met kip, gember, paksoi en paprika.","balanced asian chinese protein vegetables chicken",
+                L(I("kipfilet","140 g p.p.",false),I("zilvervliesrijst","70 g p.p.",false),I("paksoi","160 g p.p.",false),I("paprika","100 g p.p.",false),I("verse gember","10 g p.p.",false),I("sojasaus","15 ml p.p.",true),I("sesamolie","½ tl p.p.",true)),
+                "Kook de rijst.","Roerbak kip met gember.","Voeg paksoi en paprika toe en houd de groente knapperig.","Breng op smaak met sojasaus en een beetje sesamolie."));
+        recipes.add(new Recipe("china-sweet-sour-chicken","Zoetzure kip met ananas, paprika en rijst","🍍","Rijst",30,"Lichtere zoetzure kip met veel paprika en ananas.","balanced asian chinese protein vegetables chicken child",
+                L(I("kipfilet","140 g p.p.",false),I("zilvervliesrijst","70 g p.p.",false),I("paprika","150 g p.p.",false),I("ananas","80 g p.p.",false),I("passata","50 ml p.p.",false),I("rijstazijn","10 ml p.p.",true),I("honing","1 tl p.p.",true)),
+                "Kook de rijst.","Bak de kip en paprika.","Voeg ananas, passata, azijn en honing toe.","Laat kort inkoken en serveer met rijst."));
+'''
+plannerText = plannerText.replaceFirst(/(?s)\n    }\n}\s*$/, '\n' + asianRecipes + '    }\n}\n')
+if(plannerText.toLowerCase().contains('miso-kabeljauw') || plannerText.toLowerCase().contains('rundbowl')) throw new GradleException('v1.8 excluded recipe present')
+if(!plannerText.contains('indo-nasi') || !plannerText.contains('thai-green-curry') || !plannerText.contains('vietnam-noodle-bowl') || !plannerText.contains('korean-chicken-bowl')) throw new GradleException('v1.8 Asian recipes injection failed')
+plannerFile.write(plannerText,'UTF-8')
+
+android.defaultConfig.versionCode = 18
+android.defaultConfig.versionName = '1.8.0'

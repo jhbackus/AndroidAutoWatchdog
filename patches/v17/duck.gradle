@@ -1,0 +1,14 @@
+// MT Food v1.7: keep duck leg as a normal Albert Heijn recipe.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+if(!plannerFile.exists()) throw new GradleException('v1.7 duck: PlannerEngine.java not found')
+
+def plannerText = plannerFile.getText('UTF-8')
+def duckRecipe = '''
+        recipes.add(new Recipe("ah-duck-leg","Eendenbout met rodekool, appel en aardappelpuree","🦆","AVG",35,"Gegaarde eendenbout met klassieke rodekool, appel en aardappelpuree.","balanced protein vegetables oven child",
+                L(I("eendenbout gegaard","1 p.p.",false),I("rodekool","180 g p.p.",false),I("appel","½ p.p.",false),I("aardappelen","220 g p.p.",false),I("melk","40 ml p.p.",false),I("nootmuskaat","snuf",true)),
+                "Verwarm de gegaarde eendenbout volgens de verpakking, bij voorkeur in de oven.","Stoof de rodekool met appel.","Maak aardappelpuree met melk en nootmuskaat.","Serveer de eendenbout met rodekool en puree."));
+'''
+plannerText = plannerText.replaceFirst(/(?s)\n    }\n}\s*$/, '\n' + duckRecipe + '    }\n}\n')
+if(!plannerText.contains('ah-duck-leg')) throw new GradleException('v1.7 duck recipe injection failed')
+plannerFile.write(plannerText,'UTF-8')

@@ -1,0 +1,117 @@
+// MT Food v2.6: never bounce between the same replacement dishes; broaden oven/world recipe pool.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+def mainFile = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!plannerFile.exists() || !mainFile.exists()) throw new GradleException('v2.6: generated sources not found')
+
+def p = plannerFile.getText('UTF-8')
+
+// Let contextual replacement exclude every dish already shown for that date.
+p = p.replace('''    public Meal replaceMeal(LocalDate date, Meal oldMeal, List<Meal> activeOtherMeals,
+                            Set<String> banned, int maxMinutes, String diet,
+                            Set<String> nutritionFlags, String favourites, int variant){''', '''    public Meal replaceMeal(LocalDate date, Meal oldMeal, List<Meal> activeOtherMeals,
+                            Set<String> banned, int maxMinutes, String diet,
+                            Set<String> nutritionFlags, String favourites, int variant,
+                            Set<String> excludedTitles){''')
+
+p = p.replace('''        for(Recipe r:allowedRecipes){
+            if(oldMeal!=null && r.title.equals(oldMeal.title)) continue;
+            if(usedTitles.contains(r.title)) continue;''', '''        for(Recipe r:allowedRecipes){
+            if(oldMeal!=null && r.title.equals(oldMeal.title)) continue;
+            if(usedTitles.contains(r.title)) continue;
+            if(excludedTitles!=null && excludedTitles.contains(r.title)) continue;''')
+
+// Add diverse oven and world-kitchen recipes before seedRecipes() closes.
+def extraRecipes = '''
+        recipes.add(new Recipe("greek-lemon-chicken-tray","Griekse citroenkip uit de oven","🍋","AVG",40,"Ovenschotel met citroen, oregano, aardappel, courgette en kip.","balanced med protein vegetables chicken child oven",
+                L(I("kipdij","150 g p.p.",false),I("aardappelen","220 g p.p.",false),I("courgette","140 g p.p.",false),I("rode ui","¼ p.p.",false),I("citroen","½ per 2 personen",false),I("oregano","1 tl",true),I("olijfolie","1 el",true)),
+                "Verwarm de oven voor op 200 °C.","Meng aardappel, courgette en ui met olijfolie en oregano.","Leg de kipdij ertussen en besprenkel met citroen.","Rooster 30–35 minuten tot alles gaar en goudbruin is."));
+        recipes.add(new Recipe("moroccan-chicken-couscous","Marokkaanse kip met couscous en geroosterde groente","🥕","Anders",35,"Kruidige kip met ras el hanout, couscous en geroosterde groenten.","balanced med protein vegetables chicken child",
+                L(I("kipfilet","140 g p.p.",false),I("volkoren couscous","75 g p.p.",false),I("paprika","100 g p.p.",false),I("wortel","90 g p.p.",false),I("courgette","100 g p.p.",false),I("ras el hanout","1 tl",true),I("citroen","½",false)),
+                "Rooster de groenten met ras el hanout.","Bereid de couscous volgens de verpakking.","Bak de kipfilet gaar met wat ras el hanout.","Serveer met citroen over de couscous en groenten."));
+        recipes.add(new Recipe("turkish-kofta-tray","Turkse köfte met paprika en aardappel uit de oven","🧆","AVG",40,"Kruidige köfte met aardappel, paprika en yoghurtsaus.","balanced protein vegetables beef oven",
+                L(I("mager rundergehakt","130 g p.p.",false),I("aardappelen","220 g p.p.",false),I("paprika","140 g p.p.",false),I("komijn","1 tl",true),I("paprikapoeder","1 tl",true),I("magere yoghurt","50 g p.p.",false),I("peterselie","1 bosje",false)),
+                "Verwarm de oven voor op 210 °C.","Vorm köfte van gehakt, komijn en paprikapoeder.","Rooster aardappel en paprika 20 minuten en voeg daarna de köfte toe.","Bak nog 15 minuten en serveer met yoghurt en peterselie."));
+        recipes.add(new Recipe("lebanese-shawarma-tray","Libanese kipshoarma uit de oven met tabouleh","🥙","Anders",35,"Ovenkip met warme specerijen, frisse kruiden en bulgur.","balanced med protein vegetables chicken oven",
+                L(I("kippendij","150 g p.p.",false),I("bulgur","75 g p.p.",false),I("tomaat","100 g p.p.",false),I("komkommer","100 g p.p.",false),I("peterselie","1 bosje",false),I("shoarmakruiden","1 tl",true),I("citroen","½",false)),
+                "Kruid de kippendij en rooster 25 minuten op 200 °C.","Bereid de bulgur.","Meng tomaat, komkommer, peterselie en citroen door de bulgur.","Snijd de kip en serveer op de tabouleh."));
+        recipes.add(new Recipe("spanish-chicken-rice","Spaanse kip met paprika en saffraanrijst","🥘","Rijst",35,"Spaanse rijstschotel met kip, paprika, doperwten en citroen.","balanced med protein vegetables chicken",
+                L(I("kipdij","140 g p.p.",false),I("zilvervliesrijst","75 g p.p.",false),I("paprika","120 g p.p.",false),I("doperwten","70 g p.p.",false),I("tomatenblokjes","100 g p.p.",false),I("gerookt paprikapoeder","1 tl",true),I("citroen","½",false)),
+                "Bak de kipdij rondom bruin.","Voeg paprika, tomaat en paprikapoeder toe.","Roer rijst en water erdoor en laat gaar worden.","Voeg doperwten toe en werk af met citroen."));
+        recipes.add(new Recipe("mexican-fajita-tray","Mexicaanse fajita traybake met kip","🌮","Anders",30,"Ovenfajita met kip, paprika, ui, limoen en volkoren wraps.","balanced protein vegetables chicken child oven",
+                L(I("kipfilet","140 g p.p.",false),I("paprika","160 g p.p.",false),I("rode ui","¼ p.p.",false),I("volkoren wraps","2 p.p.",false),I("fajitakruiden","1 tl",true),I("limoen","½",false),I("magere yoghurt","40 g p.p.",false)),
+                "Verwarm de oven voor op 210 °C.","Meng kip, paprika en ui met fajitakruiden.","Rooster 20–25 minuten.","Serveer in wraps met limoen en yoghurt."));
+        recipes.add(new Recipe("indian-tandoori-tray","Tandoori kip met bloemkool en aardappel uit de oven","🍛","AVG",40,"Milde tandoori-ovenschotel met bloemkool, aardappel en yoghurtdressing.","balanced protein vegetables chicken oven",
+                L(I("kippendij","150 g p.p.",false),I("bloemkool","180 g p.p.",false),I("aardappelen","200 g p.p.",false),I("tandoori kruiden","1 tl",true),I("magere yoghurt","60 g p.p.",false),I("citroen","½",false)),
+                "Meng de helft van de yoghurt met tandoorikruiden en marineer de kip.","Rooster aardappel en bloemkool 15 minuten op 210 °C.","Voeg de kip toe en rooster nog 20 minuten.","Serveer met de rest van de yoghurt en citroen."));
+        recipes.add(new Recipe("italian-gnocchi-tray","Italiaanse gnocchi traybake met tomaat en mozzarella","🍅","Anders",30,"Vegetarische ovenschaal met gnocchi, tomaat, courgette en mozzarella.","balanced med veg vegetables calcium oven child",
+                L(I("gnocchi","180 g p.p.",false),I("cherrytomaten","150 g p.p.",false),I("courgette","150 g p.p.",false),I("mozzarella","60 g p.p.",false),I("basilicum","1 bosje",false),I("olijfolie","1 el",true)),
+                "Verwarm de oven voor op 210 °C.","Meng gnocchi, tomaat en courgette met olijfolie.","Rooster 20 minuten.","Verdeel mozzarella erover en bak nog 5 minuten; werk af met basilicum."));
+        recipes.add(new Recipe("greek-aubergine-feta","Griekse aubergine-feta ovenschotel","🍆","Anders",35,"Vegetarische ovenschotel met aubergine, tomaat, kikkererwten en feta.","balanced med veg vegetables legume calcium oven",
+                L(I("aubergine","180 g p.p.",false),I("kikkererwten","120 g p.p.",false),I("tomatenblokjes","150 g p.p.",false),I("feta","45 g p.p.",false),I("rode ui","¼ p.p.",false),I("oregano","1 tl",true)),
+                "Rooster aubergine en ui 15 minuten op 210 °C.","Voeg kikkererwten, tomaat en oregano toe.","Verkruimel feta erover.","Bak nog 15 minuten."));
+        recipes.add(new Recipe("spanish-tortilla-veg","Spaanse tortilla met paprika en spinazie","🥚","Anders",30,"Aardappelomelet met extra groenten en een frisse salade.","balanced med veg protein vegetables egg child",
+                L(I("eieren","2 p.p.",false),I("aardappelen","180 g p.p.",false),I("paprika","100 g p.p.",false),I("spinazie","100 g p.p.",false),I("ui","¼ p.p.",false),I("gemengde sla","70 g p.p.",false)),
+                "Kook of magnetron de aardappelblokjes beetgaar.","Bak ui, paprika en spinazie.","Voeg aardappel en losgeklopt ei toe en laat rustig stollen.","Serveer met salade."));
+        recipes.add(new Recipe("thai-peanut-tofu","Thaise pindabowl met tofu en knapperige groente","🥜","Rijst",25,"Vegetarische rijstbowl met tofu, broccoli, wortel en lichte pindasaus.","balanced veg protein vegetables tofu",
+                L(I("tofu","150 g p.p.",false),I("zilvervliesrijst","75 g p.p.",false),I("broccoli","130 g p.p.",false),I("wortel","80 g p.p.",false),I("pindakaas","20 g p.p.",false),I("sojasaus","1 el",true),I("limoen","½",false)),
+                "Kook de rijst.","Bak tofu krokant en wok broccoli en wortel.","Roer pindakaas, sojasaus, limoen en wat water tot saus.","Serveer alles als bowl met de saus."));
+        recipes.add(new Recipe("french-ratatouille-bake","Franse ratatouille met witte bonen uit de oven","🥘","Anders",40,"Provençaalse ovenschotel met courgette, aubergine, tomaat en witte bonen.","balanced med veg vegetables legume oven heart",
+                L(I("courgette","130 g p.p.",false),I("aubergine","130 g p.p.",false),I("tomatenblokjes","160 g p.p.",false),I("witte bonen","130 g p.p.",false),I("paprika","100 g p.p.",false),I("Provençaalse kruiden","1 tl",true),I("olijfolie","1 el",true)),
+                "Verwarm de oven voor op 200 °C.","Meng alle groenten met tomaat, bonen, kruiden en olijfolie.","Bak 30–35 minuten.","Schep halverwege om en serveer eventueel met volkoren brood."));
+'''
+
+p = p.replaceFirst(/(?s)\n    }\n}\s*$/, '\n' + extraRecipes + '    }\n}\n')
+
+if(!p.contains('excludedTitles') || !p.contains('Italiaanse gnocchi traybake') || !p.contains('Franse ratatouille')) {
+    throw new GradleException('v2.6 planner patch failed')
+}
+plannerFile.write(p,'UTF-8')
+
+def m = mainFile.getText('UTF-8')
+
+// Persist a per-date replacement history and exclude already-seen dishes on subsequent clicks.
+m = m.replace('''            PlannerEngine.Meal replacement=planner.replaceMeal(
+                    m.date,m,activeMeals,banned,maxMin,
+                    prefs.getString("diet_style","Gezond & gevarieerd"),
+                    household.nutritionFlags(),prefs.getString("favourites",""),
+                    prefs.getInt("menu_variant",0)+1);
+            for(int i=0;i<currentWeek.size();i++) if(currentWeek.get(i).date.equals(m.date)){ currentWeek.set(i,replacement); break; }
+            showWeek();''', '''            String histKey="replacement_history_"+m.date.toString();
+            Set<String> history=new LinkedHashSet<>();
+            String histRaw=prefs.getString(histKey,"");
+            if(!histRaw.isEmpty()) Collections.addAll(history,histRaw.split("\\u001F",-1));
+            history.add(m.title);
+            PlannerEngine.Meal replacement=planner.replaceMeal(
+                    m.date,m,activeMeals,banned,maxMin,
+                    prefs.getString("diet_style","Gezond & gevarieerd"),
+                    household.nutritionFlags(),prefs.getString("favourites",""),
+                    prefs.getInt("menu_variant",0)+history.size(),history);
+            // Only after the valid pool is exhausted may earlier replacements be reconsidered.
+            // Keep the current dish excluded so the button always changes something.
+            if(replacement==m || replacement.title.equals(m.title)){
+                history.clear();
+                history.add(m.title);
+                replacement=planner.replaceMeal(
+                        m.date,m,activeMeals,banned,maxMin,
+                        prefs.getString("diet_style","Gezond & gevarieerd"),
+                        household.nutritionFlags(),prefs.getString("favourites",""),
+                        prefs.getInt("menu_variant",0)+97,history);
+            }
+            history.add(replacement.title);
+            prefs.edit().putString(histKey,android.text.TextUtils.join("\\u001F",history)).apply();
+            for(int i=0;i<currentWeek.size();i++) if(currentWeek.get(i).date.equals(m.date)){ currentWeek.set(i,replacement); break; }
+            showWeek();''')
+
+// A completely regenerated week should start a fresh replacement cycle for its dates.
+m = m.replace('''        generate.setOnClickListener(v->{currentWeek=generateWeek();showWeek();});''', '''        generate.setOnClickListener(v->{
+            SharedPreferences.Editor ed=prefs.edit();
+            for(int d=0;d<7;d++) ed.remove("replacement_history_"+currentMonday.plusDays(d).toString());
+            ed.apply();
+            currentWeek=generateWeek();showWeek();
+        });''')
+
+if(!m.contains('replacement_history_') || !m.contains('history.size(),history')) {
+    throw new GradleException('v2.6 replacement history wiring failed')
+}
+mainFile.write(m,'UTF-8')

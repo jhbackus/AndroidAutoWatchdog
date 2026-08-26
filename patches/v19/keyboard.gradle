@@ -1,0 +1,40 @@
+// MT Food v1.9: make person editor keyboard dismissible and keep dialog controls reachable.
+def ahProject = file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def mainActivity = file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!mainActivity.exists()) throw new GradleException('v1.9: generated MainActivity not found')
+
+def mainText = mainActivity.getText('UTF-8')
+
+def oldName = '''        EditText name=input("Naam",p.name); box.addView(name);'''
+def newName = '''        EditText name=input("Naam",p.name);
+        name.setSingleLine(true);
+        name.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        name.setOnEditorActionListener((v,actionId,event)->{
+            if(actionId==android.view.inputmethod.EditorInfo.IME_ACTION_DONE ||
+                    (event!=null && event.getKeyCode()==android.view.KeyEvent.KEYCODE_ENTER)){
+                android.view.inputmethod.InputMethodManager imm=(android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
+                if(imm!=null) imm.hideSoftInputFromWindow(name.getWindowToken(),0);
+                name.clearFocus();
+                return true;
+            }
+            return false;
+        });
+        name.setOnFocusChangeListener((v,hasFocus)->{
+            if(!hasFocus){
+                android.view.inputmethod.InputMethodManager imm=(android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
+                if(imm!=null) imm.hideSoftInputFromWindow(name.getWindowToken(),0);
+            }
+        });
+        box.addView(name);'''
+if(!mainText.contains(oldName)) throw new GradleException('v1.9: name field marker not found')
+mainText = mainText.replace(oldName,newName)
+
+def oldShow = '''        dlg.setOnShowListener(x->{'''
+def newShow = '''        dlg.setOnShowListener(x->{
+            if(dlg.getWindow()!=null) dlg.getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);'''
+if(!mainText.contains(oldShow)) throw new GradleException('v1.9: dialog show marker not found')
+mainText = mainText.replace(oldShow,newShow)
+
+mainActivity.write(mainText,'UTF-8')
+android.defaultConfig.versionCode = 19
+android.defaultConfig.versionName = '1.9.0'

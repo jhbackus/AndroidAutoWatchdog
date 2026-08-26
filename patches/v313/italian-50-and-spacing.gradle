@@ -1,0 +1,164 @@
+// MT Food v3.13: add 50 curated Italian dinner recipes and increase spacing above day total.
+def ahProject=file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile=file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+def mainFile=file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!plannerFile.exists() || !mainFile.exists()) throw new GradleException('v3.13 generated sources missing')
+def p=plannerFile.getText('UTF-8')
+
+if(!p.contains('seedItalianExpansion();')) {
+    if(p.contains('public PlannerEngine(){ seedRecipes(); seedExpandedRecipes(); seedGreekExpansion(); }'))
+        p=p.replace('public PlannerEngine(){ seedRecipes(); seedExpandedRecipes(); seedGreekExpansion(); }',
+                    'public PlannerEngine(){ seedRecipes(); seedExpandedRecipes(); seedGreekExpansion(); seedItalianExpansion(); }')
+    else throw new GradleException('v3.13 constructor marker missing')
+}
+
+String method = """    private void seedItalianExpansion(){
+        String[][] data=new String[][]{
+            {"italian-lasagne-bolognese","Lasagne bolognese met courgette","🍝","Pasta","55","lasagnebladen|mager rundergehakt|courgette|passata|wortel|ui|Parmezaanse kaas"},
+            {"italian-lasagne-spinazie-ricotta","Lasagne met spinazie en ricotta","🍝","Pasta","50","lasagnebladen|spinazie|ricotta|passata|courgette|Parmezaanse kaas"},
+            {"italian-lasagne-kip-pesto","Lasagne met kip, pesto en courgette","🍝","Pasta","50","lasagnebladen|kipfilet|courgette|groene pesto|passata|mozzarella"},
+            {"italian-lasagne-aubergine","Lasagne met aubergine, tomaat en mozzarella","🍆","Pasta","55","lasagnebladen|aubergine|passata|mozzarella|courgette|basilicum"},
+            {"italian-lasagne-zalm-spinazie","Lasagne met zalm en spinazie","🐟","Pasta","50","lasagnebladen|zalmfilet|spinazie|ricotta|citroen|Parmezaanse kaas"},
+            {"italian-carpaccio-classico","Carpaccio met rucola, Parmezaan en ciabatta","🥩","Anders","20","rundercarpaccio|rucola|Parmezaanse kaas|cherrytomaten|ciabatta volkoren|pijnboompitten"},
+            {"italian-carpaccio-truffel","Carpaccio met truffeldressing, rucola en brood","🥩","Anders","20","rundercarpaccio|rucola|Parmezaanse kaas|volkoren ciabatta|truffeldressing|tomaat"},
+            {"italian-bietencarpaccio","Bietencarpaccio met geitenkaas en walnoten","🥗","Anders","20","gekookte rode biet|zachte geitenkaas|rucola|walnoten|volkoren brood|balsamico"},
+            {"italian-courgettecarpaccio","Courgettecarpaccio met citroen, ricotta en pijnboompitten","🥒","Anders","20","courgette|ricotta|citroen|rucola|pijnboompitten|volkoren focaccia"},
+            {"italian-vitello-tonnato","Vitello tonnato met rucola en krieltjes","🥩","AVG","30","kalfsfricandeau|tonijn|rucola|krieltjes|kappertjes|citroen"},
+            {"italian-melanzane-parmigiana","Melanzane alla parmigiana met salade","🍆","Anders","50","aubergine|passata|mozzarella|Parmezaanse kaas|rucola|tomaat"},
+            {"italian-pollo-parmigiana","Pollo alla parmigiana met volkoren spaghetti","🍗","Pasta","40","kipfilet|volkoren spaghetti|passata|mozzarella|courgette|basilicum"},
+            {"italian-saltimbocca-kip","Kip saltimbocca met aardappeltjes en sperziebonen","🍗","AVG","35","kipfilet|Parmaham|salie|aardappeltjes|sperziebonen|citroen"},
+            {"italian-saltimbocca-kalf","Saltimbocca alla romana met krieltjes en spinazie","🥩","AVG","35","kalfsfilet|Parmaham|salie|krieltjes|spinazie|citroen"},
+            {"italian-osso-buco","Osso buco met gremolata en polenta","🥩","Anders","60","kalfsschenkel|polenta|wortel|tomatenblokjes|bleekselderij|citroen"},
+            {"italian-pollo-cacciatore","Pollo alla cacciatora met aardappelen","🍗","AVG","50","kippendijfilet|aardappelen|paprika|tomatenblokjes|champignons|olijven"},
+            {"italian-kip-piccata","Kip piccata met citroen, kappertjes en orzo","🍋","Pasta","30","kipfilet|orzo|citroen|kappertjes|spinazie|Parmezaanse kaas"},
+            {"italian-kip-marsala","Kip marsala met champignons en tagliatelle","🍗","Pasta","35","kipfilet|volkoren tagliatelle|champignons|spinazie|ui|bouillon"},
+            {"italian-risotto-paddenstoel","Risotto ai funghi met rucola","🍚","Rijst","35","risottorijst|champignons|oesterzwammen|rucola|Parmezaanse kaas|ui"},
+            {"italian-risotto-citroen","Citroenrisotto met courgette en garnalen","🍋","Rijst","35","risottorijst|garnalen|courgette|citroen|Parmezaanse kaas|spinazie"},
+            {"italian-risotto-pompoen","Pompoenrisotto met salie en feta","🎃","Rijst","40","risottorijst|pompoen|salie|feta|spinazie|ui"},
+            {"italian-risotto-tomaat","Tomatenrisotto met mozzarella en basilicum","🍅","Rijst","35","risottorijst|passata|cherrytomaten|mozzarella|basilicum|courgette"},
+            {"italian-risotto-zalm","Risotto met zalm, doperwten en citroen","🐟","Rijst","35","risottorijst|zalmfilet|doperwten|citroen|spinazie|Parmezaanse kaas"},
+            {"italian-gnocchi-sorrentina","Gnocchi alla sorrentina met tomaat en mozzarella","🍝","Pasta","30","gnocchi|passata|mozzarella|courgette|basilicum|Parmezaanse kaas"},
+            {"italian-gnocchi-pesto","Gnocchi met pesto, kip en cherrytomaat","🍝","Pasta","30","gnocchi|kipfilet|groene pesto|cherrytomaten|courgette|rucola"},
+            {"italian-gnocchi-pompoen","Gnocchi met pompoen, spinazie en salie","🎃","Pasta","35","gnocchi|pompoen|spinazie|salie|ricotta|Parmezaanse kaas"},
+            {"italian-pasta-norma","Pasta alla Norma met aubergine en ricotta","🍆","Pasta","35","volkoren pasta|aubergine|passata|ricotta|basilicum|Parmezaanse kaas"},
+            {"italian-pasta-puttanesca","Volkoren pasta puttanesca met tonijn","🍝","Pasta","25","volkoren pasta|tonijn|passata|olijven|kappertjes|spinazie"},
+            {"italian-pasta-amatriciana","Pasta all'amatriciana met tomaat en courgette","🍝","Pasta","30","volkoren pasta|pancetta|passata|courgette|ui|Parmezaanse kaas"},
+            {"italian-pasta-arrabbiata","Pasta arrabbiata met gegrilde groenten","🌶️","Pasta","30","volkoren pasta|passata|paprika|courgette|aubergine|chili"},
+            {"italian-pasta-carbonara-light","Pasta carbonara met extra doperwten","🍝","Pasta","25","volkoren spaghetti|ei|Parmezaanse kaas|pancetta|doperwten|spinazie"},
+            {"italian-pasta-primavera","Pasta primavera met broccoli, courgette en citroen","🥦","Pasta","25","volkoren pasta|broccoli|courgette|spinazie|citroen|Parmezaanse kaas"},
+            {"italian-orecchiette-broccoli","Orecchiette met broccoli, ansjovis en citroen","🥦","Pasta","30","orecchiette|broccoli|ansjovis|citroen|cherrytomaten|Parmezaanse kaas"},
+            {"italian-tagliatelle-ragu","Tagliatelle al ragù met wortel en bleekselderij","🍝","Pasta","45","volkoren tagliatelle|mager rundergehakt|wortel|bleekselderij|passata|Parmezaanse kaas"},
+            {"italian-spaghetti-vongole","Spaghetti alle vongole met courgette","🦪","Pasta","30","volkoren spaghetti|venusschelpen|courgette|knoflook|peterselie|citroen"},
+            {"italian-spaghetti-gamberi","Spaghetti met garnalen, tomaat en chili","🍤","Pasta","25","volkoren spaghetti|garnalen|cherrytomaten|spinazie|chili|citroen"},
+            {"italian-linguine-zalm","Linguine met zalm, spinazie en citroen","🐟","Pasta","30","volkoren linguine|zalmfilet|spinazie|citroen|courgette|ricotta"},
+            {"italian-ravioli-spinazie","Ravioli ricotta-spinazie met tomaat en rucola","🍝","Pasta","25","ravioli ricotta-spinazie|cherrytomaten|rucola|courgette|Parmezaanse kaas|basilicum"},
+            {"italian-tortellini-broccoli","Tortellini met broccoli, tomaat en pesto","🍝","Pasta","25","tortellini|broccoli|cherrytomaten|groene pesto|spinazie|Parmezaanse kaas"},
+            {"italian-frittata-groenten","Italiaanse frittata met courgette, paprika en aardappel","🍳","Anders","35","ei|aardappelen|courgette|paprika|spinazie|Parmezaanse kaas"},
+            {"italian-frittata-zalm","Frittata met zalm, spinazie en dille","🍳","Anders","35","ei|zalmfilet|spinazie|aardappelen|dille|citroen"},
+            {"italian-involtini-kip","Kip-involtini met spinazie en mozzarella","🍗","AVG","40","kipfilet|spinazie|mozzarella|aardappeltjes|tomaat|basilicum"},
+            {"italian-involtini-aubergine","Aubergine-involtini met ricotta en tomatensaus","🍆","Anders","45","aubergine|ricotta|passata|spinazie|Parmezaanse kaas|volkoren brood"},
+            {"italian-polenta-ragu","Polenta met runder-ragù en gegrilde groenten","🥩","Anders","45","polenta|mager rundergehakt|passata|courgette|paprika|Parmezaanse kaas"},
+            {"italian-polenta-paddenstoel","Romige polenta met paddenstoelen en spinazie","🍄","Anders","35","polenta|champignons|oesterzwammen|spinazie|Parmezaanse kaas|ui"},
+            {"italian-caponata-kip","Siciliaanse caponata met kip en couscous","🍆","Anders","35","kipfilet|aubergine|courgette|tomaat|olijven|volkoren couscous"},
+            {"italian-caponata-vis","Siciliaanse caponata met kabeljauw","🐟","AVG","35","kabeljauwfilet|aubergine|courgette|tomaat|aardappeltjes|olijven"},
+            {"italian-minestrone","Minestrone met witte bonen en volkoren brood","🥣","Anders","35","witte bonen|courgette|wortel|tomatenblokjes|spinazie|volkoren brood"},
+            {"italian-ribollita","Ribollita met witte bonen, boerenkool en brood","🥣","Anders","40","witte bonen|boerenkool|wortel|tomatenblokjes|volkoren brood|ui"},
+            {"italian-panzanella-kip","Panzanella met gegrilde kip","🥗","Anders","25","kipfilet|tomaat|komkommer|paprika|volkoren ciabatta|basilicum"}
+        };
+        for(String[] d:data){
+            List<Ingredient> ing=new ArrayList<>();
+            for(String raw:d[5].split("\\|")) ing.add(italianIngredient(raw));
+            String tags=italianTags(d[1],d[5]);
+            recipes.add(new Recipe(d[0],d[1],d[2],d[3],Integer.parseInt(d[4]),
+                    "Italiaans gerecht met een complete maaltijdcombinatie en veel variatie.",tags,ing,
+                    italianSteps(d[1],d[3],d[5])));
+        }
+    }
+
+    private static Ingredient italianIngredient(String n){
+        String x=n.toLowerCase(Locale.ROOT);
+        String amount="naar smaak";
+        boolean pantry=false;
+        if(x.contains("pasta")||x.contains("spaghetti")||x.contains("linguine")||x.contains("tagliatelle")||x.contains("orecchiette")||x.contains("orzo")||x.contains("risottorijst")||x.contains("polenta")||x.contains("couscous")) amount="75–90 g p.p.";
+        else if(x.contains("lasagnebladen")) amount="3–4 bladen p.p.";
+        else if(x.contains("gnocchi")||x.contains("ravioli")||x.contains("tortellini")) amount="150–180 g p.p.";
+        else if(x.contains("kip")||x.contains("zalm")||x.contains("kabeljauw")||x.contains("garnalen")||x.contains("kalfs")||x.contains("runder")||x.contains("varkens")||x.contains("carpaccio")||x.contains("tonijn")||x.contains("venusschelpen")) amount="140–160 g p.p.";
+        else if(x.contains("ei")) amount="2 p.p.";
+        else if(x.contains("mozzarella")||x.contains("ricotta")||x.contains("feta")||x.contains("geitenkaas")) amount="50–70 g p.p.";
+        else if(x.contains("parmeza")) amount="15–25 g p.p.";
+        else if(x.contains("passata")||x.contains("tomatenblokjes")) amount="140–160 ml p.p.";
+        else if(x.contains("brood")||x.contains("ciabatta")||x.contains("focaccia")) amount="1 portie p.p.";
+        else if(x.contains("aardappel")||x.contains("krieltjes")) amount="200–220 g p.p.";
+        else if(x.contains("groente")||x.contains("courgette")||x.contains("aubergine")||x.contains("paprika")||x.contains("broccoli")||x.contains("spinazie")||x.contains("wortel")||x.contains("boerenkool")||x.contains("tomaat")||x.contains("komkommer")||x.contains("doperwten")||x.contains("champignon")||x.contains("oesterzwam")||x.contains("biet")) amount="100–180 g p.p.";
+        else if(x.contains("bonen")) amount="120–150 g p.p.";
+        else if(x.contains("olijfolie")||x.contains("basilicum")||x.contains("salie")||x.contains("citroen")||x.contains("kappertjes")||x.contains("olijven")||x.contains("chili")||x.contains("balsamico")) pantry=true;
+        return new Ingredient(n,amount,pantry);
+    }
+
+    private static String italianTags(String title,String ingredients){
+        String x=(title+" "+ingredients).toLowerCase(Locale.ROOT);
+        String tags="balanced med italian vegetables ";
+        if(x.contains("kip")) tags+="chicken protein ";
+        if(x.contains("zalm")) tags+="fish salmon omega3 protein ";
+        else if(x.contains("kabeljauw")||x.contains("tonijn")||x.contains("ansjovis")||x.contains("vongole")||x.contains("venusschelpen")||x.contains("garnalen")) tags+="fish protein ";
+        if(x.contains("runder")||x.contains("kalf")||x.contains("carpaccio")) tags+="beef protein ";
+        if(x.contains("ei")) tags+="egg protein ";
+        if(!x.contains("kip")&&!x.contains("zalm")&&!x.contains("kabeljauw")&&!x.contains("tonijn")&&!x.contains("ansjovis")&&!x.contains("garnalen")&&!x.contains("vongole")&&!x.contains("venusschelpen")&&!x.contains("runder")&&!x.contains("kalf")&&!x.contains("carpaccio")&&!x.contains("pancetta")&&!x.contains("parmaham")) tags+="veg ";
+        return tags.trim();
+    }
+
+    private static String[] italianSteps(String title,String category,String ingredients){
+        String t=title.toLowerCase(Locale.ROOT);
+        if(t.contains("lasagne")) return new String[]{
+                "Verwarm de oven voor op 190 °C. Snijd de groenten klein en bereid de vulling rustig in een koekenpan.",
+                "Maak de saus en proef op peper, Italiaanse kruiden en zuurgraad; houd de saus iets dunner zodat de lasagnebladen goed garen.",
+                "Bouw laag voor laag op met saus, vulling en lasagnebladen en eindig met de kaas.",
+                "Bak 30–35 minuten in de oven tot de bovenkant goudbruin is en laat 5 minuten rusten voor aansnijden."};
+        if(t.contains("carpaccio")) return new String[]{
+                "Verdeel de carpaccio of flinterdun gesneden groente over koude borden.",
+                "Verdeel rucola, tomaat en de overige garnituren gelijkmatig en schaaf de kaas erover.",
+                "Maak een lichte dressing en druppel die pas vlak voor serveren over het gerecht.",
+                "Serveer met het brood zodat dit een volwaardige lichte avondmaaltijd is."};
+        if(t.contains("risotto")) return new String[]{
+                "Snijd de groenten en eventuele vis of garnalen vooraf zodat alles klaarstaat.",
+                "Fruit ui zacht, voeg de risottorijst toe en bak 1 minuut tot de korrels glanzen.",
+                "Voeg warme bouillon in delen toe en roer regelmatig gedurende 18–20 minuten; voeg groenten op het juiste moment toe.",
+                "Haal van het vuur, meng de kaas en overige smaakmakers erdoor en laat 2 minuten rusten."};
+        if(t.contains("frittata")) return new String[]{
+                "Verwarm de oven voor op 190 °C en snijd aardappel en groenten in kleine stukken.",
+                "Bak de aardappel en stevige groenten eerst beetgaar in een ovenvaste pan.",
+                "Klop de eieren los met kaas en kruiden, giet over de vulling en laat de onderkant kort stollen.",
+                "Zet 8–12 minuten in de oven tot het midden net gaar is en serveer met de resterende groenten."};
+        if(t.contains("osso buco")||t.contains("cacciatora")||t.contains("ribollita")||t.contains("minestrone")) return new String[]{
+                "Snijd alle groenten vooraf in gelijkmatige stukken en kruid het hoofdingrediënt.",
+                "Bak aromaten en eventueel vlees eerst aan zodat er smaak op de bodem ontstaat.",
+                "Voeg tomaat en voldoende vocht toe en laat rustig garen tot groenten en vlees mals zijn.",
+                "Proef, werk af met verse kruiden, citroen of Parmezaan en serveer direct."};
+        if("Pasta".equals(category)) return new String[]{
+                "Breng ruim water aan de kook en snijd ondertussen de groenten en het eiwit in hapklare stukken.",
+                "Kook de pasta beetgaar en bewaar een kopje kookvocht.",
+                "Bereid in een grote pan de saus en groenten; bak vlees of vis apart of mee afhankelijk van het gerecht.",
+                "Meng pasta en saus met een scheut kookvocht, werk af met kruiden en kaas en serveer meteen."};
+        return new String[]{
+                "Was en snijd alle groenten en zet de overige ingrediënten afgemeten klaar.",
+                "Bereid het hoofdingrediënt en de koolhydraatbron volgens het gerecht en houd de bereiding licht en sappig.",
+                "Voeg de groenten toe op volgorde van gaartijd en breng op smaak met Italiaanse kruiden, citroen of tomaat.",
+                "Controleer de garing, werk af met kaas of verse kruiden en serveer direct."};
+    }
+
+"""
+if(!p.contains('private void seedItalianExpansion(){')) {
+    int at=p.lastIndexOf("\n}")
+    if(at<0) throw new GradleException('v3.13 planner closing marker missing')
+    p=p.substring(0,at)+"\n"+method+p.substring(at)
+}
+if(!p.contains('italian-carpaccio-classico') || !p.contains('italian-lasagne-bolognese'))
+    throw new GradleException('v3.13 Italian expansion validation failed')
+plannerFile.write(p,'UTF-8')
+
+def m=mainFile.getText('UTF-8')
+m=m.replace('c.addView(space(dp(10)));\n            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,false,GREEN));',
+            'c.addView(space(dp(18)));\n            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,false,GREEN));')
+if(!m.contains('c.addView(space(dp(18)));') || !m.contains('Dagtotaal ≈'))
+    throw new GradleException('v3.13 day-total spacing patch failed')
+mainFile.write(m,'UTF-8')

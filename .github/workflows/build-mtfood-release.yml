@@ -23,16 +23,16 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Prepare MT Food v3.13 without Crisp
+      - name: Prepare MT Food v3.14 without Crisp
         shell: python
         run: |
           from pathlib import Path
           p=Path('app/build.gradle')
           s=p.read_text()
-          s=s.replace('versionCode 15', 'versionCode 43')
+          s=s.replace('versionCode 15', 'versionCode 44')
           s=s.replace("versionName '1.5.0'", "versionName '3.13.0'")
-          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v3.13')
-          s=s.replace('// MT Food v1.5:', '// MT Food v3.13:')
+          s=s.replace('Koppeling en veilige praktijktest • v1.5', 'Koppeling en veilige praktijktest • v3.14')
+          s=s.replace('// MT Food v1.5:', '// MT Food v3.14:')
           s += '\napply from: rootProject.file("patches/v17/duck.gradle")\n'
           s += 'apply from: rootProject.file("patches/v18/asian.gradle")\n'
           s += 'apply from: rootProject.file("patches/v19/keyboard.gradle")\n'
@@ -62,7 +62,7 @@ jobs:
           s += 'apply from: rootProject.file("patches/v311/greek-expansion.gradle")\n'
           s += 'apply from: rootProject.file("patches/v312/contextual-banned-substitution.gradle")\n'
           s += 'apply from: rootProject.file("patches/v313/italian-50-and-spacing.gradle")\n'
-          s += 'apply from: rootProject.file("patches/v313/italian-split-fix.gradle")\n'
+          s += 'apply from: rootProject.file("patches/v313/italian-split-fix.gradle")\n'\n          s += 'apply from: rootProject.file("patches/v314/hard-limits-randomization-catalog.gradle")\n'
           p.write_text(s)
 
           q=Path('patches/v32/calories-allergy-ui.gradle')
@@ -101,7 +101,7 @@ jobs:
       - name: Sign and verify MT Food
         run: |
           UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
-          OUT=MT-Food-v3.13.apk
+          OUT=MT-Food-v3.14.apk
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)
           "$APKSIGNER" sign \
             --ks "$RUNNER_TEMP/mtfood-release.p12" \
@@ -118,8 +118,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MT-Food-v3.13-signed
+          name: MT-Food-v3.14-signed
           path: |
-            MT-Food-v3.13.apk
+            MT-Food-v3.14.apk
             MT-Food-release.sha256
             MT-Food-signing-verification.txt

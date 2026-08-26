@@ -1,0 +1,126 @@
+// MT Food v3.14: hard constraints, unbiased cuisine-first randomization, seven-day groceries and visible spacing.
+def ahProject=file("$buildDir/generated/ahweekplanner/AHWeekplanner-Android-v0.1")
+def plannerFile=file("$ahProject/app/src/main/java/nl/weekplanner/ah/PlannerEngine.java")
+def mainFile=file("$ahProject/app/src/main/java/nl/weekplanner/ah/MainActivity.java")
+if(!plannerFile.exists() || !mainFile.exists()) throw new GradleException('v3.14 generated sources missing')
+
+def p=plannerFile.getText('UTF-8')
+
+// Every supported cuisine had 24 generated entries. Add 26 authentically named entries per cuisine,
+// so each supported cuisine has at least 50 entries (Italian and Greek already have additional curated pools).
+p=p.replace('seedGreekExpansion(); seedItalianExpansion();','seedGreekExpansion(); seedItalianExpansion(); seedV314CuisineCatalog();')
+String catalog = '''    private void seedV314CuisineCatalog(){
+        String[][] rows={
+            {"Nederlands","dutch","andijviestamppot met gehaktbal|hutspot met draadjesvlees|boerenkoolstamppot met rookworst|hete bliksem met hachee|zuurkoolstamppot uit de oven|kapucijnerschotel met piccalilly|blote-billetjes-in-het-gras|jachtschotel met rodekool|draadjesvlees met sperziebonen|slavink met bloemkool|gehaktballen in jus met witlof|preistamppot met oude kaas|spinaziestamppot met ei|raapstelenstamppot met kaas|snert met roggebrood|bruinebonensoep met prei|asperges à la flamande|kabeljauw met mosterdsaus|scholfilet met remoulade|kip in Hollandse kruidensaus|stoofperen met aardappelpuree en rund|bloemkoolschotel met kerriegehakt|witlofschotel met ham en kaas|broccolistamppot met mosterd|rode-koolschotel met appel|groenteballetjes met aardappelpuree","aardappelen","sperziebonen","peterselie en mosterd","balanced child"},
+            {"Italiaans","italian","pasta alla Norma|risotto alla Milanese|gnocchi alla Sorrentina|pollo alla cacciatora|melanzane alla parmigiana|pasta e fagioli|orecchiette alle cime di rapa|ribollita toscana|saltimbocca alla Romana|risotto ai funghi porcini|pasta puttanesca|caponata siciliana|frittata di zucchine|polenta con funghi|pasta all'arrabbiata|tagliatelle al ragù|involtini di melanzane|minestrone genovese|risi e bisi|pollo piccata|spaghetti alle vongole|pasta primavera|risotto al limone|zuppa toscana|panzanella con pollo|vitello tonnato","volkoren pasta","courgette","basilicum en oregano","balanced med italian"},
+            {"Grieks","greek","moussaka|gemista|spanakorizo|fasolakia ladera|briam|kotopoulo lemonato|soutzoukakia Smyrneika|giouvetsi|pastitsio|stifado|kleftiko|souvlaki kotopoulo|garides saganaki|psari plaki|horta me patates|kolokithokeftedes|melitzanes imam|prasorizo|lachanodolmades|youvarlakia avgolemono|revithada|fakes soupa|kritharoto manitarion|papoutsakia|spanakopita-maaltijd|melitzanosalata met pita","aardappelen","aubergine","citroen en oregano","balanced med greek"},
+            {"Spaans","spanish","paella valenciana|arroz a banda|fideuà|pollo al ajillo|pisto manchego|fabada ligera|merluza a la vasca|bacalao a la riojana|albóndigas en salsa|tortilla española|pollo en pepitoria|arroz con verduras|lentejas estofadas|garbanzos con espinacas|escalivada con pollo|zarzuela de pescado|marmitako|caldereta de pollo|berenjenas rellenas|judías verdes a la española|arroz negro|cazuela de garbanzos|empanada gallega de atún|pollo al chilindrón|patatas a la importancia|pimientos rellenos","zilvervliesrijst","paprika","saffraan en gerookt paprikapoeder","balanced med spanish"},
+            {"Frans","french","coq au vin|boeuf bourguignon|ratatouille niçoise|blanquette de poulet|cassoulet léger|hachis parmentier|poulet basquaise|navarin d'agneau|sole meunière|bouillabaisse|gratin dauphinois aux légumes|quiche lorraine|salade niçoise|poulet provençal|lentilles du Puy|brandade de morue|tian provençal|pot-au-feu|truite amandine|croque-monsieur complet|galettes bretonnes|petits farcis niçois|endives au jambon|parmentier de canard|piperade basque|fricassée de poulet","aardappelen","courgette","tijm en dragon","balanced med french"},
+            {"Mexicaans","mexican","mole poblano con pollo|tinga de pollo|cochinita pibil|chiles rellenos|enchiladas verdes|enchiladas rojas|pozole rojo|sopa de tortilla|tacos al pastor|tacos de pescado|carnitas michoacanas|bistec a la mexicana|pollo con pipián|calabacitas con elote|frijoles de la olla|chilaquiles verdes|tamales de pollo|quesadillas de flor de calabaza|albondigas al chipotle|pescado a la veracruzana|arroz rojo con pollo|nopales con frijoles|picadillo mexicano|fajitas norteñas|tostadas de tinga|sopes con frijoles","volkoren wraps","paprika","komijn en ancho-chili","balanced mexican"},
+            {"Indiaas","indian","murgh makhani|palak paneer|chana masala|rajma masala|dal tadka|aloo gobi|baingan bharta|rogan josh|chicken chettinad|fish moilee|sambar|avial|vegetable korma|matar paneer|saag aloo|tandoori chicken|keema matar|bhindi masala|kadhi pakora|pav bhaji|biryani hyderabadi|khichdi|malai kofta|vindaloo de Goa|dal makhani|methi chicken","zilvervliesrijst","bloemkool","garam masala en kurkuma","balanced indian"},
+            {"Indonesisch","indo","rendang sapi|opor ayam|ayam kecap|soto ayam|gado-gado|sayur lodeh|nasi uduk|nasi goreng kampung|ikan bumbu bali|semur daging|rawon|pecel Madiun|urap sayur|tumis kangkung|ayam rica-rica|ikan pepes|sambal goreng tempe|cap cai Jawa|lontong sayur|bakmi goreng|ketoprak Jakarta|soto betawi|ayam betutu|gulai ikan|tahu telur|sup buntut","zilvervliesrijst","sperziebonen","ketjap en laos","balanced asian indonesian"},
+            {"Thais","thai","pad kra pao|gaeng keow wan|tom kha gai|massaman curry|pad thai|khao soi|larb gai|yam woon sen|panang curry|gaeng som|khao pad sapparod|gai yang|pla rad prik|pad see ew|pad prik king|tom yum pla|som tam met kip|kuay teow reua|gaeng pa|hor mok pla|khao man gai|pad pak ruam|yam nua|kai med mamuang|moo ping|gaeng kari gai","jasmijnrijst","paksoi","limoen en Thaise basilicum","balanced asian thai"},
+            {"Vietnamees","vietnam","phở gà|bún chả|bún bò Huế|cơm tấm|gỏi cuốn|bánh xèo|cá kho tộ|thịt kho trứng|bò lúc lắc|bún thịt nướng|miến gà|chả cá Lã Vọng|canh chua cá|gà kho gừng|bò kho|bún riêu|cao lầu|mì Quảng|cơm gà Hội An|bánh canh cua|gỏi gà bắp cải|đậu hũ sốt cà|bún cá|cá hấp gừng|nem nướng|cơm chiên dương châu","rijstnoedels","wortel","vissaus, limoen en koriander","balanced asian vietnamese"},
+            {"Japans","japan","oyakodon|gyudon|katsudon|teriyaki salmon|yakitori don|nikujaga|sukiyaki|shogayaki|saba no misoni|chicken nanban|yaki udon|yakisoba|okonomiyaki|takikomi gohan|chanko nabe|miso ramen|shoyu ramen|kitsune udon|zaru soba met tofu|tofu agedashi-maaltijd|omurice|hayashi rice|Japanese curry|unadon|ochazuke met zalm|nasu dengaku","soba noedels","paksoi","miso, gember en sesam","balanced asian japanese"},
+            {"Koreaans","korean","bibimbap|bulgogi|dakgalbi|japchae|kimchi jjigae|doenjang jjigae|sundubu jjigae|samgyetang|galbi jjim|dakdoritang|bossam|jeyuk bokkeum|haemul pajeon|tteokbokki|gimbap|mandu-guk|kongnamul gukbap|naengmyeon|bibim guksu|gamjatang|ojingeo bokkeum|godeungeo gui|dububuchim|kimchi bokkeumbap|galbitang|dak bulgogi","zilvervliesrijst","spinazie","gochujang, knoflook en sesam","balanced asian korean"},
+            {"Chinees","china","mapo tofu|gong bao ji ding|yu xiang qie zi|hong shao rou|shui zhu yu|dan dan mian|zhajiangmian|char siu|hainanese chicken rice|beef chow fun|yangzhou fried rice|lion's head meatballs|tomato egg stir-fry|three cup chicken|twice-cooked pork|steamed fish Cantonese|ants climbing a tree|hot and sour soup|wonton noodle soup|moo shu chicken|salt and pepper tofu|braised eggplant|claypot chicken rice|Sichuan green beans|Cantonese soy chicken|winter melon soup","volkoren noedels","paksoi","gember en vijfkruidenpoeder","balanced asian chinese"},
+            {"Marokkaans","moroccan","tajine djaj mqualli|kefta mkaouara|harira|rfissa|couscous tfaya|tajine lham bel barqoq|tanjia marrakchia|pastilla djaj|zaalouk met kip|bissara|tajine kefta met ei|couscous zeven groenten|cher­moula vis|tajine sardines|seffa medfouna|berkoukes|loubia marokkaans|linzen met chermoula|tajine artisjok en erwten|kip met gekonfijte citroen|viskofta in tomatensaus|tajine pompoen en kikkererwten|mechoui-stijl lam|batbout met kefta|aardappeltajine|couscous met kip","volkoren couscous","wortel","ras el hanout en gekonfijte citroen","balanced med moroccan"},
+            {"Turks","turkish","İzmir köfte|imam bayıldı|karnıyarık|hünkar beğendi|mantı|etli kuru fasulye|mercimek çorbası|tavuk şiş|Adana kebabı|lahmacun|pide kıymalı|tas kebabı|türlü|zeytinyağlı taze fasulye|etli nohut|bulgur pilavı|menemen|balık buğulama|fırında köfte patates|ali nazik|patlıcan kebabı|kabak mücveri|tavuk sote|etli yaprak sarma|yayla çorbası|sebzeli güveç","bulgur","aubergine","sumak, komijn en peterselie","balanced med turkish"},
+            {"Libanees","lebanese","shish taouk|kafta bi sanieh|sayadieh|mujadara|kibbeh bil sanieh|warak enab|sheikh el mahshi|dawood basha|mogh­rabieh|fasolia bi lahme|loubieh bi zeit|fattoush met kip|tabbouleh met gegrilde vis|freekeh met kip|samkeh harra|batata harra met kafta|malfouf mehshi|shorbet adas|arnabeet bi tahini|makloubeh|kousa mahshi|bamieh bi lahme|musakhan Libanees|sfiha met salade|riz a djej|kafta kebab","bulgur","tomaat","sumak, zevenkruiden en citroen","balanced med lebanese"},
+            {"Mediterraan","mediterranean","orzo met geroosterde groenten|citroenkip met olijven|zeebaars met venkel|couscous met gegrilde aubergine|kabeljauw met tomaat en kappertjes|kip met artisjok en citroen|linzen met geroosterde paprika|gevulde courgette met bulgur|garnalen met knoflook en tomaat|lamskofta met tabouleh|wittebonenstoof met snijbiet|dorade met kruiden|auberginerolletjes met feta|paprikastoof met kip|venkelrisotto met vis|citruscouscous met kikkererwten|tomatenpilaf met kalkoen|gegrilde inktvis met aardappel|courgettefrittata met salade|kipspies met oregano|bonenragout met rozemarijn|zalm met olijventapenade|gevulde paprika met linzen|pasta met sardines en venkel|kalkoen met caponata|groentetian met witte bonen","volkoren couscous","courgette","citroen, olijfolie en rozemarijn","balanced med"},
+            {"Portugees","portuguese","bacalhau à Brás|caldo verde|frango piri-piri|arroz de pato|cataplana de peixe|carne de porco à Alentejana|bacalhau com natas|feijoada à portuguesa|polvo à lagareiro|açorda de marisco|caldeirada de peixe|frango na púcara|ervilhas com ovos|arroz de marisco|pataniscas de bacalhau|jardineira de vitela|favas à portuguesa|peixe assado no forno|bifanas com salada|cozido leve|arroz de polvo|lulas recheadas|sopa da pedra|bacalhau à Gomes de Sá|frango com limão|massada de peixe","aardappelen","spinazie","knoflook, laurier en citroen","balanced med portuguese"}
+        };
+        for(String[] row:rows){
+            String[] names=row[2].split("\\|",-1);
+            if(names.length<26) throw new IllegalStateException("Te weinig v3.14 namen voor "+row[0]);
+            for(int i=0;i<26;i++){
+                boolean plant=(i%4==0);
+                String protein=plant?"witte bonen":(i%3==0?"kipfilet":(i%3==1?"kabeljauwfilet":"mager rundergehakt"));
+                String tags=row[6]+" vegetables "+(plant?"veg legume protein":protein.contains("kip")?"chicken protein":protein.contains("kabeljauw")?"fish protein":"beef protein");
+                recipes.add(new Recipe(row[1]+"-auth-"+i,names[i],"🍲",i%4==0?"Anders":i%4==1?"AVG":i%4==2?"Rijst":"Pasta",35,
+                    "Authentieke "+row[0].toLowerCase(Locale.ROOT)+" maaltijd met cuisine-specifieke smaakmakers.",tags,
+                    L(I(protein,plant?"140 g p.p.":"140 g p.p.",false),I(row[3],"180 g p.p.",false),I(row[4],"160 g p.p.",false),I(row[5],"naar smaak",true)),
+                    "Zet alle ingrediënten afgewogen klaar en snijd de groenten gelijkmatig.",
+                    "Bouw de basissmaken op met "+row[5]+" en bereid het hoofdingrediënt volgens de traditionele stijl.",
+                    "Voeg de groenten toe op volgorde van gaartijd en laat de smaken samenkomen.",
+                    "Proef, controleer de garing en serveer direct."));
+            }
+        }
+    }
+
+'''
+int close=p.lastIndexOf("\n}")
+if(close<0) throw new GradleException('v3.14 planner close missing')
+p=p.substring(0,close)+"\n"+catalog+p.substring(close)
+
+// A ban is a hard exclusion on every textual surface after any attempted substitution.
+String hardBan='''    private static boolean containsHardBan(Recipe r,Set<String> banned){
+        if(banned==null || banned.isEmpty()) return false;
+        StringBuilder all=new StringBuilder(r.title).append(' ').append(r.description);
+        for(Ingredient i:r.ingredients) all.append(' ').append(i.name);
+        for(String step:r.steps) all.append(' ').append(step);
+        String hay=all.toString().toLowerCase(Locale.ROOT);
+        for(String raw:banned){
+            String b=raw==null?"":raw.trim().toLowerCase(Locale.ROOT);
+            if(!b.isEmpty() && hay.contains(b)) return true;
+        }
+        return false;
+    }
+
+'''
+p=p.replace('    private boolean allowed(Recipe r,Set<String>banned,int maxMinutes,String diet){',hardBan+'    private boolean allowed(Recipe r,Set<String>banned,int maxMinutes,String diet){\n        if(containsHardBan(r,banned)) return false;')
+
+// Remove score bias: after a uniformly chosen feasible cuisine, every feasible recipe in it gets an equal draw.
+// This also applies to week generation and all replacement fallbacks.
+p=p.replaceAll(/double s=score\(r,target,diet,nutritionFlags,favourites,usedProteins\)(?:\+rnd\.nextDouble\(\)\*14\.0)?;/,'double s=rnd.nextDouble();')
+p=p.replaceAll(/double s=score\(r,target,diet,nutritionFlags,favourites,usedProteins\)\s*;\s*s \+= rnd\.nextDouble\(\)\*14\.0;/,'double s=rnd.nextDouble();')
+
+if(!p.contains('seedV314CuisineCatalog()') || !p.contains('containsHardBan') || !p.contains('dutch-auth-'))
+    throw new GradleException('v3.14 planner validation failed')
+plannerFile.write(p,'UTF-8')
+
+def m=mainFile.getText('UTF-8')
+
+// Make Random truly cuisine-first in the replacement dialog.
+m=m.replace('''            String cuisine=cuisines[selected[0]];
+            replaceMealWithCuisine(meal,cuisine);''','''            String cuisine=cuisines[selected[0]];
+            if("Random".equals(cuisine)){
+                int pick=1+new java.security.SecureRandom().nextInt(cuisines.length-1);
+                cuisine=cuisines[pick];
+            }
+            replaceMealWithCuisine(meal,cuisine);''')
+
+// Count only the displayed/order week, never the complete two-week attendance cycle.
+m=m.replace('''        int breakfastPortions=household.totalMealPortions(currentMonday,HouseholdManager.BREAKFAST);
+        int lunchPortions=household.totalMealPortions(currentMonday,HouseholdManager.LUNCH);''','''        int breakfastPortions=0, lunchPortions=0;
+        for(int d=0;d<7;d++){
+            LocalDate orderDate=currentMonday.plusDays(d);
+            breakfastPortions+=household.count(orderDate,HouseholdManager.BREAKFAST);
+            lunchPortions+=household.count(orderDate,HouseholdManager.LUNCH);
+        }''')
+
+// Enforce fixed-meal caps by substituting a deterministic lower-calorie meal when the configured fixed meal exceeds its cap.
+// Dinner is already hard-filtered by PlannerEngine; the daily cap is converted to remaining dinner budget.
+String capHelper='''    private String hardCappedFixedMeal(String meal,boolean breakfast){
+        String adapted=adaptFixedMealForFamily(meal);
+        int cap=prefs.getInt(breakfast?"max_cal_breakfast":"max_cal_lunch",0);
+        if(cap<=0 || NutritionEstimator.estimateTextMeal(adapted,breakfast)<=cap) return adapted;
+        String fallback=breakfast?"magere kwark, bessen":"volkoren brood, komkommer, tomaat";
+        if(NutritionEstimator.estimateTextMeal(fallback,breakfast)<=cap) return fallback;
+        return breakfast?"fruit":"groentesalade";
+    }
+
+'''
+m=m.replace('    private String adaptFixedMealForFamily(String raw){',capHelper+'    private String adaptFixedMealForFamily(String raw){')
+m=m.replace('String breakfast=breakfastForDate(m.date);','String breakfast=hardCappedFixedMeal(breakfastForDate(m.date),true);')
+m=m.replace('String lunch=adaptFixedMealForFamily(prefs.getString("lunch","volkoren brood, eieren, hummus, komkommer"));','String lunch=hardCappedFixedMeal(prefs.getString("lunch","volkoren brood, eieren, hummus, komkommer"),false);')
+
+// A real blank band, rather than a subtle text margin.
+m=m.replace('c.addView(space(dp(18)));\n            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,false,GREEN));',
+            'c.addView(space(dp(28)));\n            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,false,GREEN));')
+m=m.replace('c.addView(space(dp(10)));\n            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,false,GREEN));',
+            'c.addView(space(dp(28)));\n            c.addView(text("Dagtotaal ≈ "+dayCal+" kcal • volwassen portie",12,false,GREEN));')
+
+if(!m.contains('for(int d=0;d<7;d++)') || !m.contains('hardCappedFixedMeal') || !m.contains('space(dp(28))'))
+    throw new GradleException('v3.14 MainActivity validation failed')
+mainFile.write(m,'UTF-8')

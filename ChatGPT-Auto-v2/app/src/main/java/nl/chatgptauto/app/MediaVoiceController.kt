@@ -11,6 +11,7 @@ import kotlinx.coroutines.*
 import okhttp3.*
 import org.json.JSONArray
 import org.json.JSONObject
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -74,6 +75,7 @@ object MediaVoiceController {
         private var previousMode = AudioManager.MODE_NORMAL
         private var commDevice: AudioDeviceInfo? = null
         @Volatile private var endAfterResponse = false
+        @Volatile private var assistantSpeaking = false
 
         fun start() {
             if (isRunning) return
@@ -94,6 +96,7 @@ object MediaVoiceController {
         fun stop() {
             if (!isRunning || !finishing.compareAndSet(false, true)) return
             isRunning = false
+            assistantSpeaking = false
             runCatching { recorder?.stop() }
             runCatching { ws?.close(1000, "user stopped") }
         }
@@ -114,18 +117,28 @@ object MediaVoiceController {
                 override fun onMessage(webSocket: WebSocket, text: String) {
                     val j = runCatching { JSONObject(text) }.getOrNull() ?: return
                     when (j.optString("type")) {
-                        "session.created", "session.updated", "input_audio_buffer.speech_started" -> setState("Ik luister…")
-                        "input_audio_buffer.speech_stopped" -> setState("Even denken…")
+                        "session.created", "session.updated" -> setState("Ik luister…")
+                        "input_audio_buffer.speech_started" -> if (!assistantSpeaking) setState("Ik luister…")
+                        "input_audio_buffer.speech_stopped" -> if (!assistantSpeaking) setState("Even denken…")
                         "conversation.item.input_audio_transcription.completed" -> {
                             val tr = j.optString("transcript").trim()
-                            if (tr.isNotBlank()) handleTranscript(webSocket, tr)
+                            if (tr.isNotBlank()) {
+                                if (assistantSpeaking) handleStopOnly(webSocket, tr)
+                                else handleTranscript(webSocket, tr)
+                            }
                         }
-                        "response.created" -> setState("ChatGPT antwoordt…")
+                        "response.created" -> {
+                            assistantSpeaking = true
+                            setState("ChatGPT antwoordt… — zeg ‘stop’ om te onderbreken")
+                        }
                         "response.output_audio.delta", "response.audio.delta" -> {
                             val d = j.optString("delta")
-                            if (d.isNotEmpty()) playPcm(Base64.decode(d, Base64.DEFAULT))
+                            if (d.isNotEmpty() && assistantSpeaking) playPcm(Base64.decode(d, Base64.DEFAULT))
                         }
-                        "response.done" -> if (endAfterResponse) stop() else if (isRunning) setState("Ik luister…")
+                        "response.done" -> {
+                            assistantSpeaking = false
+                            if (endAfterResponse) stop() else if (isRunning) setState("Ik luister…")
+                        }
                         "error" -> {
                             val msg = j.optJSONObject("error")?.optString("message") ?: "Realtime-fout"
                             if (cont.isActive) cont.resumeWith(Result.failure(Exception(msg)))
@@ -136,6 +149,23 @@ object MediaVoiceController {
                 override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) { if (cont.isActive) cont.resumeWith(Result.failure(t)) }
             })
             cont.invokeOnCancellation { stop() }
+        }
+
+        private fun handleStopOnly(webSocket: WebSocket, transcript: String) {
+            val normalized = transcript.lowercase(Locale.ROOT)
+                .replace(Regex("[^a-zà-ÿ ]"), " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+            val words = normalized.split(' ').filter { it.isNotBlank() }
+            val stopSignal = words.size <= 3 && words.any { it == "stop" }
+            if (!stopSignal) return
+
+            assistantSpeaking = false
+            endAfterResponse = false
+            webSocket.send(JSONObject().put("type", "response.cancel").toString())
+            webSocket.send(JSONObject().put("type", "input_audio_buffer.clear").toString())
+            clearOutputAudio()
+            setState("Gestopt. Ik luister…")
         }
 
         private fun handleTranscript(webSocket: WebSocket, transcript: String) {
@@ -155,10 +185,11 @@ object MediaVoiceController {
         private fun sessionUpdate(): JSONObject {
             val input = JSONObject().put("format", JSONObject().put("type", "audio/pcm").put("rate", 24000))
                 .put("noise_reduction", JSONObject().put("type", "far_field"))
-                .put("transcription", JSONObject().put("model", "gpt-4o-mini-transcribe").put("language", "nl"))
+                .put("transcription", JSONObject().put("model", "gpt-4o-mini-transcribe").put("language", "nl")
+                    .put("prompt", "Nederlands in een auto. Als de assistent spreekt kan de gebruiker uitsluitend 'stop' zeggen om het antwoord direct te onderbreken."))
                 .put("turn_detection", JSONObject().put("type", "server_vad").put("threshold", 0.50)
-                    .put("prefix_padding_ms", 300).put("silence_duration_ms", 650)
-                    .put("create_response", false).put("interrupt_response", true))
+                    .put("prefix_padding_ms", 300).put("silence_duration_ms", 500)
+                    .put("create_response", false).put("interrupt_response", false))
             val out = JSONObject().put("format", JSONObject().put("type", "audio/pcm").put("rate", 24000)).put("voice", voice)
             return JSONObject().put("type", "session.update").put("session", JSONObject()
                 .put("type", "realtime").put("model", "gpt-realtime-2.1")
@@ -220,6 +251,14 @@ object MediaVoiceController {
             output?.write(data, 0, data.size)
         }
 
+        @Synchronized private fun clearOutputAudio() {
+            runCatching {
+                output?.pause()
+                output?.flush()
+                output?.play()
+            }
+        }
+
         private fun resample16to24(input: ByteArray, bytes: Int): ByteArray {
             val samples = bytes / 2
             if (samples < 2) return input.copyOf(bytes)
@@ -238,6 +277,7 @@ object MediaVoiceController {
 
         private fun cleanup() {
             isRunning = false
+            assistantSpeaking = false
             runCatching { recorder?.stop(); recorder?.release() }; recorder = null
             runCatching { output?.pause(); output?.flush(); output?.stop(); output?.release() }; output = null
             runCatching { ws?.close(1000, "done") }; ws = null

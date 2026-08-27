@@ -3,6 +3,8 @@ package nl.chatgptauto.app;
 import android.net.Uri;
 
 import androidx.annotation.Nullable;
+import androidx.media3.common.C;
+import androidx.media3.common.ForwardingPlayer;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.Player;
@@ -23,6 +25,10 @@ import java.util.List;
  * Android Auto discovery and playback entry point. The media item is a tiny
  * silent looping WAV; Android Auto therefore gets a valid playable selection,
  * while play/pause controls the actual CAR AI voice engine behind it.
+ *
+ * A forwarding player deliberately reports no meaningful duration/position,
+ * so Android Auto does not animate a music-style progress bar for the voice
+ * assistant. The CAR AI octopus artwork is exposed as media artwork.
  */
 public final class CarAiMediaLibraryService extends MediaLibraryService {
     private static final String ROOT_ID = "car_ai_root";
@@ -31,15 +37,21 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
             "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 
     private ExoPlayer player;
+    private Player displayPlayer;
     private MediaLibrarySession librarySession;
     private volatile String voiceState = "Tik om CAR AI te starten";
     private boolean previousPlayWhenReady = false;
 
-    private static MediaItem rootItem() {
+    private Uri artworkUri() {
+        return Uri.parse("android.resource://" + getPackageName() + "/" + R.drawable.car_ai_logo);
+    }
+
+    private MediaItem rootItem() {
         return new MediaItem.Builder()
                 .setMediaId(ROOT_ID)
                 .setMediaMetadata(new MediaMetadata.Builder()
                         .setTitle("CAR AI")
+                        .setArtworkUri(artworkUri())
                         .setIsBrowsable(true)
                         .setIsPlayable(false)
                         .build())
@@ -53,6 +65,7 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
                         .setTitle("CAR AI")
                         .setSubtitle(voiceState)
                         .setArtist("Voice assistant")
+                        .setArtworkUri(artworkUri())
                         .setIsBrowsable(false)
                         .setIsPlayable(true)
                         .build());
@@ -74,6 +87,15 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
                 if (playWhenReady) startVoice(); else stopVoice();
             }
         });
+
+        displayPlayer = new ForwardingPlayer(player) {
+            @Override public long getCurrentPosition() { return 0L; }
+            @Override public long getBufferedPosition() { return 0L; }
+            @Override public long getDuration() { return C.TIME_UNSET; }
+            @Override public long getContentPosition() { return 0L; }
+            @Override public long getContentBufferedPosition() { return 0L; }
+            @Override public long getContentDuration() { return C.TIME_UNSET; }
+        };
 
         MediaLibrarySession.Callback callback = new MediaLibrarySession.Callback() {
             @Override
@@ -123,7 +145,7 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
             }
         };
 
-        librarySession = new MediaLibrarySession.Builder(this, player, callback)
+        librarySession = new MediaLibrarySession.Builder(this, displayPlayer, callback)
                 .setId("car_ai_media")
                 .build();
     }
@@ -171,6 +193,7 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
             librarySession.release();
             librarySession = null;
         }
+        displayPlayer = null;
         if (player != null) {
             player.release();
             player = null;

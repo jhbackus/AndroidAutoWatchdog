@@ -32,14 +32,44 @@ class MainActivity : AppCompatActivity() {
         brokerUrl.setText(prefs.getString("broker_url", BuildConfig.BROKER_URL))
         brokerToken.setText(prefs.getString("broker_token", BuildConfig.BROKER_TOKEN))
 
+        // Same user-facing names as Alaive Android/Android Auto. CAR AI currently
+        // uses the Realtime API, whose supported built-in voices do not include
+        // onyx. The Alaive entries that map to onyx are therefore intentionally
+        // not exposed here until CAR AI's output path is switched to Speech API.
         val voiceLabels = arrayOf(
-            "Marin — vrouwelijk klinkend",
-            "Coral — vrouwelijk klinkend",
-            "Shimmer — vrouwelijk klinkend",
-            "Sage — vrouwelijk klinkend",
-            "Verse", "Cedar", "Alloy", "Ash", "Ballad", "Echo"
+            "Emma Natural",
+            "Fenna",
+            "Colette",
+            "Maarten Donker",
+            "Coco",
+            "Mijn stem",
+            "Gwendolien",
+            "Ruth",
+            "Paultje",
+            "Sage",
+            "Verse",
+            "Alloy",
+            "Ash",
+            "Ballad",
+            "Echo"
         )
-        val voiceIds = arrayOf("marin", "coral", "shimmer", "sage", "verse", "cedar", "alloy", "ash", "ballad", "echo")
+        val voiceIds = arrayOf(
+            "coral",
+            "marin",
+            "shimmer",
+            "cedar",
+            "marin",
+            "shimmer",
+            "marin",
+            "shimmer",
+            "cedar",
+            "sage",
+            "verse",
+            "alloy",
+            "ash",
+            "ballad",
+            "echo"
+        )
         voice.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, voiceLabels)
         val savedVoice = prefs.getString("voice", "marin") ?: "marin"
         voice.setSelection(voiceIds.indexOf(savedVoice).coerceAtLeast(0))
@@ -55,7 +85,7 @@ class MainActivity : AppCompatActivity() {
                     .putString("broker_token", token)
                     .putString("voice", voiceIds[voice.selectedItemPosition])
                     .apply()
-                status.text = "Opgeslagen. Open CAR AI in Android Auto en kies Voice assistant."
+                status.text = "Opgeslagen. De gekozen Alaive-stem wordt gebruikt bij de volgende CAR AI-sessie."
             }
         }
 

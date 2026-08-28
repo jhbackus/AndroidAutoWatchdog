@@ -17,6 +17,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -26,9 +28,14 @@ import java.util.List;
  * silent looping WAV; Android Auto therefore gets a valid playable selection,
  * while play/pause controls the actual CAR AI voice engine behind it.
  *
+ * The playable item carries the octopus as embedded FRONT_COVER artwork. The
+ * browse-root intentionally has no artwork, so Android Auto does not render a
+ * small/cropped thumbnail on the left and instead uses the full image in the
+ * now-playing album-art area on the right.
+ *
  * A forwarding player deliberately reports no meaningful duration/position,
  * so Android Auto does not animate a music-style progress bar for the voice
- * assistant. The CAR AI octopus artwork is exposed as media artwork.
+ * assistant.
  */
 public final class CarAiMediaLibraryService extends MediaLibraryService {
     private static final String ROOT_ID = "car_ai_root";
@@ -41,9 +48,20 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
     private MediaLibrarySession librarySession;
     private volatile String voiceState = "Tik om CAR AI te starten";
     private boolean previousPlayWhenReady = false;
+    private byte[] cachedArtwork;
 
-    private Uri artworkUri() {
-        return Uri.parse("android.resource://" + getPackageName() + "/" + R.drawable.car_ai_logo);
+    private byte[] artworkBytes() {
+        if (cachedArtwork != null) return cachedArtwork;
+        try (InputStream in = getResources().openRawResource(R.drawable.car_ai_logo);
+             ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int n;
+            while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
+            cachedArtwork = out.toByteArray();
+            return cachedArtwork;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private MediaItem rootItem() {
@@ -51,7 +69,6 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
                 .setMediaId(ROOT_ID)
                 .setMediaMetadata(new MediaMetadata.Builder()
                         .setTitle("CAR AI")
-                        .setArtworkUri(artworkUri())
                         .setIsBrowsable(true)
                         .setIsPlayable(false)
                         .build())
@@ -59,16 +76,22 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
     }
 
     private MediaItem voiceItem(boolean playableUri) {
+        MediaMetadata.Builder metadata = new MediaMetadata.Builder()
+                .setTitle("CAR AI")
+                .setSubtitle(voiceState)
+                .setArtist("Voice assistant")
+                .setAlbumTitle("CAR AI")
+                .setIsBrowsable(false)
+                .setIsPlayable(true);
+
+        byte[] artwork = artworkBytes();
+        if (artwork != null && artwork.length > 0) {
+            metadata.setArtworkData(artwork, MediaMetadata.PICTURE_TYPE_FRONT_COVER);
+        }
+
         MediaItem.Builder b = new MediaItem.Builder()
                 .setMediaId(VOICE_ITEM_ID)
-                .setMediaMetadata(new MediaMetadata.Builder()
-                        .setTitle("CAR AI")
-                        .setSubtitle(voiceState)
-                        .setArtist("Voice assistant")
-                        .setArtworkUri(artworkUri())
-                        .setIsBrowsable(false)
-                        .setIsPlayable(true)
-                        .build());
+                .setMediaMetadata(metadata.build());
         if (playableUri) b.setUri(Uri.parse(SILENCE_DATA_URI));
         return b.build();
     }
@@ -198,6 +221,7 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
             player.release();
             player = null;
         }
+        cachedArtwork = null;
         super.onDestroy();
     }
 }

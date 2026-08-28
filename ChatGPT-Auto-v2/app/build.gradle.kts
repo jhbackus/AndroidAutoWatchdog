@@ -26,7 +26,7 @@ android {
         minSdk = 28
         targetSdk = 35
         versionCode = 3000 + ciRunNumber
-        versionName = "0.5.5"
+        versionName = "0.5.6"
         buildConfigField("String", "BROKER_URL", "\"wss://bilateral.netwerkers.nl/chatgpt-auto\"")
         buildConfigField("String", "BROKER_TOKEN", "\"$brokerTokenForBuild\"")
     }

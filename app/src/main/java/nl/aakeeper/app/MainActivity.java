@@ -24,7 +24,7 @@ public class MainActivity extends Activity {
     private String lastStep = "";
 
     private final Shizuku.OnBinderReceivedListener binderReceived = () -> { ShizukuBridge.bind(); lastStep = ""; refresh(); continueSoon(); };
-    private final Shizuku.OnBinderDeadListener binderDead = this::refresh;
+    private final Shizuku.OnBinderDeadListener binderDead = () -> {\n        LogStore.add(this, "Shizuku-server gestopt. Na een telefoonherstart moet Shizuku opnieuw worden gestart.");\n        refresh();\n    };
     private final Shizuku.OnRequestPermissionResultListener permissionResult = (requestCode, grantResult) -> {
         if (requestCode == ShizukuBridge.REQ) {
             LogStore.add(this, grantResult == PackageManager.PERMISSION_GRANTED ? "Shizuku-toestemming verleend." : "Shizuku-toestemming geweigerd.");
@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
 
     @Override protected void onResume() { super.onResume(); ShizukuBridge.bind(); refresh(); if (setupStarted && !LogStore.isSetupComplete(this)) continueSoon(); }
-    @Override protected void onDestroy() { try { Shizuku.removeBinderReceivedListener(binderReceived); Shizuku.removeBinderDeadListener(binderDead); Shizuku.removeRequestPermissionResultListener(permissionResult); } catch (Throwable ignored) {} super.onDestroy(); }
+    @Override protected void onDestroy() { statusHandler.removeCallbacksAndMessages(null); try { Shizuku.removeBinderReceivedListener(binderReceived); Shizuku.removeBinderDeadListener(binderDead); Shizuku.removeRequestPermissionResultListener(permissionResult); } catch (Throwable ignored) {} super.onDestroy(); }
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) { super.onRequestPermissionsResult(requestCode, permissions, results); if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) lastStep = ""; refresh(); continueSoon(); }
 
     private void continueSoon() { new Handler(Looper.getMainLooper()).postDelayed(() -> { if (!isFinishing() && setupStarted && !LogStore.isSetupComplete(this)) continueSetup(); }, 650); }
@@ -172,7 +172,7 @@ public class MainActivity extends Activity {
                 "\nAndroid Auto: " + (packageInstalled(AA) ? "gevonden ✓" : "niet gevonden"));
         toggle.setText(LogStore.isEnabled(this) ? "STOP WATCHDOG" : "START WATCHDOG");
         shizukuStatus.setText(ShizukuBridge.status());
-        if (LogStore.isSetupComplete(this)) { setupStatus.setText("Installatie gereed ✓ Watchdog en Android Auto-bescherming zijn geconfigureerd."); setupButton.setText("CONTROLEER INSTELLINGEN OPNIEUW"); }
+        if (LogStore.isSetupComplete(this)) { setupStatus.setText(ShizukuBridge.binderAlive() ? "Installatie gereed ✓ Watchdog en Android Auto-bescherming zijn geconfigureerd." : "Installatie gereed • Start Shizuku opnieuw na een telefoonherstart."); setupButton.setText("CONTROLEER INSTELLINGEN OPNIEUW"); }
         log.setText(deviceInfo() + "\n\n--- LOG ---\n" + LogStore.get(this));
     }
 

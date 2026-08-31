@@ -179,7 +179,7 @@ public class MainActivity extends Activity {
         log.setText(deviceInfo() + "\n\n--- LOG ---\n" + LogStore.get(this));
     }
 
-    private String deviceInfo() { return "Android Auto Watchdog 1.4.0\n" + Build.MANUFACTURER + " " + Build.MODEL + "\nAndroid " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n" + ShizukuBridge.status(); }
+    private String deviceInfo() { return "Android Auto Watchdog 1.7.0\n" + Build.MANUFACTURER + " " + Build.MODEL + "\nAndroid " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")\n" + ShizukuBridge.status(); }
     private String compact(String s) { if (s == null) return "geen resultaat"; String x = s.replace('\n',' ').replaceAll("\\s+"," ").trim(); return x.length() > 900 ? x.substring(0,900) + "…" : x; }
     private boolean hasBluetoothPermission() { return Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED; }
     private boolean hasNotificationPermission() { return Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED; }

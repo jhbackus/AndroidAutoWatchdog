@@ -18,7 +18,8 @@ public class KeeperService extends Service {
     private ConnectivityManager.NetworkCallback networkCallback;
     private BroadcastReceiver bluetoothReceiver;
     private long lastCarConnectMs = 0L;
-    private int lastShizukuState = -1;\n    private int maintenanceRuns = 0;
+    private int lastShizukuState = -1;
+    private int maintenanceRuns = 0;
 
     private final Runnable shizukuHealth = new Runnable() {
         @Override public void run() {
@@ -118,7 +119,10 @@ public class KeeperService extends Service {
         };
         IntentFilter f = new IntentFilter();
         f.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
-        f.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);\n        f.addAction(Intent.ACTION_SCREEN_OFF);\n        f.addAction(Intent.ACTION_SCREEN_ON);\n        f.addAction(Intent.ACTION_USER_PRESENT);
+        f.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
+        f.addAction(Intent.ACTION_SCREEN_OFF);
+        f.addAction(Intent.ACTION_SCREEN_ON);
+        f.addAction(Intent.ACTION_USER_PRESENT);
         try {
             if (Build.VERSION.SDK_INT >= 33) registerReceiver(bluetoothReceiver, f, Context.RECEIVER_NOT_EXPORTED);
             else registerReceiver(bluetoothReceiver, f);

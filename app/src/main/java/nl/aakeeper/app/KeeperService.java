@@ -18,7 +18,7 @@ public class KeeperService extends Service {
     private ConnectivityManager.NetworkCallback networkCallback;
     private BroadcastReceiver bluetoothReceiver;
     private long lastCarConnectMs = 0L;
-    private int lastShizukuState = -1;
+    private int lastShizukuState = -1;\n    private int maintenanceRuns = 0;
 
     private final Runnable shizukuHealth = new Runnable() {
         @Override public void run() {
@@ -41,15 +41,19 @@ public class KeeperService extends Service {
     private final Runnable maintenance = new Runnable() {
         @Override public void run() {
             if (!LogStore.isEnabled(KeeperService.this)) return;
+            maintenanceRuns++;
             if (ShizukuBridge.permissionGranted()) {
-                ShizukuBridge.runAsync(KeeperService.this, ShizukuBridge.boostCommand(AA), result ->
-                        LogStore.add(KeeperService.this, result.contains("ERROR:")
-                                ? "Periodieke Android Auto-bescherming gaf een fout: " + compact(result)
-                                : "Periodieke Android Auto-bescherming gecontroleerd."));
-            } else {
-                LogStore.add(KeeperService.this, "Periodieke bescherming overgeslagen: Shizuku-server of toestemming ontbreekt.");
+                ShizukuBridge.runAsync(KeeperService.this, ShizukuBridge.boostCommand(AA), result -> {
+                    if (result.contains("ERROR:")) {
+                        LogStore.add(KeeperService.this, "Preventieve Android Auto-bescherming gaf een fout: " + compact(result));
+                    } else if (maintenanceRuns % 12 == 1) {
+                        LogStore.add(KeeperService.this, "Preventieve bescherming actief: Android Auto is active, niet-inactief, niet-stopped en vrijgesteld van Doze.");
+                    }
+                });
+            } else if (maintenanceRuns % 12 == 1) {
+                LogStore.add(KeeperService.this, "Preventieve bescherming wacht op Shizuku.");
             }
-            handler.postDelayed(this, 6L * 60L * 60L * 1000L);
+            handler.postDelayed(this, 5L * 60L * 1000L);
         }
     };
 
@@ -59,7 +63,7 @@ public class KeeperService extends Service {
         createChannel();
         registerNetworkMonitor();
         registerBluetoothMonitor();
-        LogStore.add(this, "Android Auto Watchdog v1.6-service gestart. Geen permanente Wi-Fi-lock actief.");
+        LogStore.add(this, "Android Auto Watchdog v1.7-service gestart. Preventieve Honor-bescherming iedere vijf minuten actief. Geen permanente Wi-Fi-lock actief.");
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -82,6 +86,14 @@ public class KeeperService extends Service {
         bluetoothReceiver = new BroadcastReceiver() {
             @Override public void onReceive(Context context, Intent intent) {
                 String action = intent.getAction();
+                if (Intent.ACTION_SCREEN_OFF.equals(action) || Intent.ACTION_SCREEN_ON.equals(action) || Intent.ACTION_USER_PRESENT.equals(action)) {
+                    if (ShizukuBridge.permissionGranted()) {
+                        ShizukuBridge.runAsync(KeeperService.this, ShizukuBridge.boostCommand(AA), result -> {
+                            if (result.contains("ERROR:")) LogStore.add(KeeperService.this, "Bescherming bij schermstatus gaf een fout: " + compact(result));
+                        });
+                    }
+                    return;
+                }
                 if (!BluetoothDevice.ACTION_ACL_CONNECTED.equals(action) && !BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(action)) return;
 
                 BluetoothDevice device = null;
@@ -106,7 +118,7 @@ public class KeeperService extends Service {
         };
         IntentFilter f = new IntentFilter();
         f.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
-        f.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
+        f.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);\n        f.addAction(Intent.ACTION_SCREEN_OFF);\n        f.addAction(Intent.ACTION_SCREEN_ON);\n        f.addAction(Intent.ACTION_USER_PRESENT);
         try {
             if (Build.VERSION.SDK_INT >= 33) registerReceiver(bluetoothReceiver, f, Context.RECEIVER_NOT_EXPORTED);
             else registerReceiver(bluetoothReceiver, f);
@@ -208,7 +220,7 @@ public class KeeperService extends Service {
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "Android Auto Watchdog", NotificationManager.IMPORTANCE_LOW);
-            ch.setDescription("Bewaakt Shizuku, Bluetooth-trigger en Android Auto-handshake zonder Wi-Fi permanent wakker te houden.");
+            ch.setDescription("Beschermt Android Auto preventief tegen Honor/MagicOS-achtergrondbeperkingen en bewaakt de verbindingshandshake.");
             getSystemService(NotificationManager.class).createNotificationChannel(ch);
         }
     }

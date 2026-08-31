@@ -103,10 +103,13 @@ public final class ShizukuBridge {
     public static String boostCommand(String pkg) {
         String p = q(pkg);
         return "echo '[protect]'; am set-standby-bucket " + p + " active 2>&1; " +
+                "am set-inactive " + p + " false 2>&1; " +
+                "cmd package set-stopped-state " + p + " false 2>&1; " +
                 "cmd appops set " + p + " RUN_IN_BACKGROUND allow 2>&1; " +
                 "cmd appops set " + p + " RUN_ANY_IN_BACKGROUND allow 2>&1; " +
                 "dumpsys deviceidle whitelist +" + p + " 2>&1; " +
-                "echo '[bucket]'; am get-standby-bucket " + p + " 2>&1";
+                "echo '[verify]'; am get-standby-bucket " + p + " 2>&1; am get-inactive " + p + " 2>&1; " +
+                "dumpsys package " + p + " | grep -E 'User 0:|stopped=' | head -4";
     }
 
     public static String diagnosticCommand(String pkg) {

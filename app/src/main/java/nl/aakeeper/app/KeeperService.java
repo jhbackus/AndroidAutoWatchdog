@@ -18,15 +18,36 @@ public class KeeperService extends Service {
     private ConnectivityManager.NetworkCallback networkCallback;
     private BroadcastReceiver bluetoothReceiver;
     private long lastCarConnectMs = 0L;
+    private int lastShizukuState = -1;
+
+    private final Runnable shizukuHealth = new Runnable() {
+        @Override public void run() {
+            if (!LogStore.isEnabled(KeeperService.this)) return;
+            int state = !ShizukuBridge.binderAlive() ? 0 : (!ShizukuBridge.permissionGranted() ? 1 : (ShizukuBridge.serviceConnected() ? 3 : 2));
+            if (state != lastShizukuState) {
+                String message = state == 0 ? "Shizuku-server niet actief. Start Shizuku opnieuw; de Watchdog kan de server niet zelf starten."
+                        : state == 1 ? "Shizuku actief, maar Watchdog-toestemming ontbreekt."
+                        : state == 2 ? "Shizuku actief en toegestaan; shellservice wordt opnieuw verbonden."
+                        : "Shizuku en Watchdog-shellservice actief.";
+                LogStore.add(KeeperService.this, message);
+                updateNotification(state == 0 ? "Shizuku opnieuw starten" : "Wacht op verbinding met de auto");
+                lastShizukuState = state;
+            }
+            if (state == 2) ShizukuBridge.bind();
+            handler.postDelayed(this, 60000L);
+        }
+    };
 
     private final Runnable maintenance = new Runnable() {
         @Override public void run() {
             if (!LogStore.isEnabled(KeeperService.this)) return;
             if (ShizukuBridge.permissionGranted()) {
-                ShizukuBridge.runAsync(KeeperService.this, ShizukuBridge.boostCommand(AA), result -> {
-                    if (result.contains("ERROR:")) LogStore.add(KeeperService.this, "Periodieke Android Auto protection gaf een fout.");
-                    else LogStore.add(KeeperService.this, "Periodieke Android Auto protection gecontroleerd.");
-                });
+                ShizukuBridge.runAsync(KeeperService.this, ShizukuBridge.boostCommand(AA), result ->
+                        LogStore.add(KeeperService.this, result.contains("ERROR:")
+                                ? "Periodieke Android Auto-bescherming gaf een fout: " + compact(result)
+                                : "Periodieke Android Auto-bescherming gecontroleerd."));
+            } else {
+                LogStore.add(KeeperService.this, "Periodieke bescherming overgeslagen: Shizuku-server of toestemming ontbreekt.");
             }
             handler.postDelayed(this, 6L * 60L * 60L * 1000L);
         }
@@ -38,7 +59,7 @@ public class KeeperService extends Service {
         createChannel();
         registerNetworkMonitor();
         registerBluetoothMonitor();
-        LogStore.add(this, "Android Auto Watchdog-service gestart. Geen permanente Wi-Fi-lock actief.");
+        LogStore.add(this, "Android Auto Watchdog v1.6-service gestart. Geen permanente Wi-Fi-lock actief.");
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
@@ -51,7 +72,9 @@ public class KeeperService extends Service {
         LogStore.setEnabled(this, true);
         startForeground(1001, notification("Wacht op verbinding met de auto"));
         handler.removeCallbacks(maintenance);
-        handler.postDelayed(maintenance, 2500);
+        handler.removeCallbacks(shizukuHealth);
+        handler.post(shizukuHealth);
+        handler.postDelayed(maintenance, 2500L);
         return START_STICKY;
     }
 
@@ -78,6 +101,7 @@ public class KeeperService extends Service {
                 boolean connected = BluetoothDevice.ACTION_ACL_CONNECTED.equals(action);
                 LogStore.add(KeeperService.this, "Bluetooth " + (connected ? "verbonden" : "verbroken") + ": " + name);
                 if (connected && matchesConfiguredCar(name)) onCarConnected(name);
+                if (!connected && matchesConfiguredCar(name)) updateNotification("Autoverbinding verbroken");
             }
         };
         IntentFilter f = new IntentFilter();
@@ -101,32 +125,46 @@ public class KeeperService extends Service {
         long now = System.currentTimeMillis();
         if (now - lastCarConnectMs < 15000L) return;
         lastCarConnectMs = now;
-        LogStore.add(this, "Auto-trigger geactiveerd voor: " + name + ". Android Auto wordt voorbereid.");
+        LogStore.add(this, "Auto-trigger geactiveerd voor " + name + ". Fase 1: Bluetooth verbonden; Android Auto wordt voorbereid.");
         updateNotification("Auto verbonden – Android Auto controleren");
 
         if (ShizukuBridge.permissionGranted()) {
-            ShizukuBridge.runAsync(this, ShizukuBridge.repairCommand(AA), result -> {
-                LogStore.add(this, result.contains("ERROR:") ? "Soft repair mislukt." : "Soft repair toegepast bij Bluetooth-verbinding.");
-            });
-            handler.postDelayed(() -> runHandshakeSnapshot("+15 s"), 15000L);
-            handler.postDelayed(() -> runHandshakeSnapshot("+45 s"), 45000L);
+            ShizukuBridge.bind();
+            ShizukuBridge.runAsync(this, ShizukuBridge.repairCommand(AA), result ->
+                    LogStore.add(this, result.contains("ERROR:") ? "Soft repair mislukt: " + compact(result) : "Soft repair toegepast bij Bluetooth-verbinding."));
+            handler.postDelayed(() -> runHandshakeSnapshot("+15 s", false), 15000L);
+            handler.postDelayed(() -> runHandshakeSnapshot("+45 s", true), 45000L);
+            handler.postDelayed(() -> runHandshakeSnapshot("+90 s", false), 90000L);
         } else {
-            LogStore.add(this, "Shizuku niet beschikbaar; alleen Bluetooth/Wi-Fi gebeurtenis gelogd.");
+            LogStore.add(this, "Shizuku niet beschikbaar. De Bluetooth-trigger is vastgelegd, maar Android Auto kon niet worden voorbereid.");
+            updateNotification("Auto verbonden – Shizuku niet actief");
         }
     }
 
-    private void runHandshakeSnapshot(String phase) {
+    private void runHandshakeSnapshot(String phase, boolean retryWhenAbsent) {
         if (!LogStore.isEnabled(this) || !ShizukuBridge.permissionGranted()) return;
         ShizukuBridge.runAsync(this, ShizukuBridge.handshakeCommand(AA), result -> {
-            LogStore.add(this, "Handshake snapshot " + phase + ": " + compact(result));
-            updateNotification("Android Auto handshake gecontroleerd");
+            boolean aaAbsent = result.contains("AA_PROCESS_ABSENT");
+            boolean aaRequestedNetwork = result.contains("RequestorPkg: com.google.android.projection.gearhead");
+            String conclusion = aaAbsent
+                    ? "Android Auto-proces niet gestart; de auto heeft de projectiesessie waarschijnlijk niet aangevraagd."
+                    : aaRequestedNetwork
+                    ? "Android Auto draait en heeft een netwerkverzoek geplaatst."
+                    : "Android Auto draait, maar er is nog geen herkenbaar Android Auto-netwerkverzoek.";
+            LogStore.add(this, "Handshake " + phase + ": " + conclusion + " Details: " + compact(result));
+            updateNotification(aaAbsent ? "Bluetooth actief – Android Auto start niet" : "Android Auto handshake gezien");
+            if (retryWhenAbsent && aaAbsent) {
+                LogStore.add(this, "Eenmalige veilige herstelpoging na 45 seconden; Bluetooth en Wi-Fi worden niet gereset.");
+                ShizukuBridge.runAsync(this, ShizukuBridge.repairCommand(AA), retry ->
+                        LogStore.add(this, retry.contains("ERROR:") ? "Herstelpoging mislukt: " + compact(retry) : "Android Auto opnieuw vrijgegeven na ontbrekende start."));
+            }
         });
     }
 
     private String compact(String s) {
         if (s == null) return "geen resultaat";
         String x = s.replace('\n', ' ').replaceAll("\\s+", " ").trim();
-        return x.length() > 700 ? x.substring(0, 700) + "…" : x;
+        return x.length() > 1200 ? x.substring(0, 1200) + "…" : x;
     }
 
     private void registerNetworkMonitor() {
@@ -136,11 +174,10 @@ public class KeeperService extends Service {
                 @Override public void onAvailable(Network network) {
                     NetworkCapabilities nc = cm.getNetworkCapabilities(network);
                     if (nc != null && nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))
-                        LogStore.add(KeeperService.this, "Wi-Fi netwerk beschikbaar (monitoring; geen lock). ");
+                        LogStore.add(KeeperService.this, "Wi-Fi-netwerk beschikbaar. Dit bewijst nog niet dat het de Android Auto-verbinding is.");
                 }
                 @Override public void onLost(Network network) {
-                    NetworkCapabilities nc = cm.getNetworkCapabilities(network);
-                    LogStore.add(KeeperService.this, "Netwerk verloren: " + network + (nc != null ? " capabilities=" + nc : ""));
+                    LogStore.add(KeeperService.this, "Wi-Fi-netwerk verloren: " + network + ".");
                 }
             };
             cm.registerNetworkCallback(new NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(), networkCallback);
@@ -171,7 +208,7 @@ public class KeeperService extends Service {
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
             NotificationChannel ch = new NotificationChannel(CHANNEL_ID, "Android Auto Watchdog", NotificationManager.IMPORTANCE_LOW);
-            ch.setDescription("Bewaakt Bluetooth-trigger en Android Auto-status zonder Wi-Fi permanent wakker te houden.");
+            ch.setDescription("Bewaakt Shizuku, Bluetooth-trigger en Android Auto-handshake zonder Wi-Fi permanent wakker te houden.");
             getSystemService(NotificationManager.class).createNotificationChannel(ch);
         }
     }

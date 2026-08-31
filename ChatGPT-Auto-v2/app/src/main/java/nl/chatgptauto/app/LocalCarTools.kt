@@ -9,18 +9,22 @@ import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.net.Uri
 import android.provider.ContactsContract
+import androidx.car.app.CarContext
 import androidx.core.content.ContextCompat
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 /** Local actions that ChatGPT Auto can execute from a recognized Dutch voice command. */
-class LocalCarTools(private val context: Context) {
+class LocalCarTools(
+    private val context: Context,
+    private val releaseCarAiAudio: () -> Unit = {}
+) {
 
     data class Result(val handled: Boolean, val message: String = "", val endConversation: Boolean = false)
 
     fun tryHandle(raw: String): Result {
         val text = raw.trim()
-        val lower = text.lowercase()
+        val lower = text.lowercase().replace(Regex("[.!?]+$"), "").trim()
 
         navigationDestination(text, lower)?.let { destination ->
             return navigateWaze(destination)
@@ -71,7 +75,7 @@ class LocalCarTools(private val context: Context) {
     }
 
     private fun mentionsSpotify(text: String) = text.contains("spotify")
-    private fun mentionsRoonArc(text: String) = text.contains("roon arc") || text.contains("roonarc") || text.contains("arc")
+    private fun mentionsRoonArc(text: String) = text.contains("roon arc") || text.contains("roonarc") || text.contains("roon")
 
     private fun parseMediaAction(original: String, lower: String): Pair<String, String?>? {
         if (lower.contains("volgend") || lower.contains("skip")) return "next" to null
@@ -99,14 +103,22 @@ class LocalCarTools(private val context: Context) {
     }
 
     private fun navigateWaze(destination: String): Result {
+        releaseCarAiAudio()
         val encoded = URLEncoder.encode(destination, StandardCharsets.UTF_8.toString()).replace("+", "%20")
-        val uri = Uri.parse("https://waze.com/ul?q=$encoded&navigate=yes&utm_source=chatgpt_auto")
-        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
-            setPackage("com.waze")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        }
         return runCatching {
-            context.startActivity(intent)
+            if (context is CarContext) {
+                val intent = Intent(
+                    CarContext.ACTION_NAVIGATE,
+                    Uri.parse("geo:0,0?q=$encoded&mode=d&intent=navigation")
+                ).addCategory(Intent.CATEGORY_DEFAULT)
+                context.startCarApp(intent)
+            } else {
+                val intent = Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("https://waze.com/ul?q=$encoded&navigate=yes&utm_source=chatgpt_auto")
+                ).setPackage("com.waze").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            }
             Result(true, "Navigatie naar $destination gestart in Waze.", true)
         }.getOrElse {
             Result(true, "Waze kon niet worden geopend. Controleer of Waze is geïnstalleerd.")
@@ -152,6 +164,7 @@ class LocalCarTools(private val context: Context) {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         return runCatching {
+            releaseCarAiAudio()
             context.startActivity(intent)
             Result(true, "Ik bel ${chosen.first}.", true)
         }.getOrElse {
@@ -166,7 +179,7 @@ class LocalCarTools(private val context: Context) {
             else -> return Result(true, "Onbekende media-app.")
         }
         val label = if (app == "spotify") "Spotify" else "Roon ARC"
-        val controller = mediaControllers().firstOrNull { it.packageName == packageName }
+        var controller = mediaControllers().firstOrNull { it.packageName == packageName }
 
         if (controller == null) {
             if (action == "open" || action == "play" || action == "search_play") {
@@ -174,14 +187,20 @@ class LocalCarTools(private val context: Context) {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 if (launch != null) {
+                    releaseCarAiAudio()
                     context.startActivity(launch)
-                    return Result(true, "$label geopend. Start daar zo nodig eerst een afspeelsessie.", true)
+                    repeat(8) {
+                        if (controller != null) return@repeat
+                        Thread.sleep(350)
+                        controller = mediaControllers().firstOrNull { it.packageName == packageName }
+                    }
                 }
             }
-            return Result(true, "$label heeft nog geen actieve mediasessie. Open de app eerst of geef ChatGPT Auto mediatoegang.")
+            if (controller == null) return Result(true, "$label is geopend. Geef CAR AI mediatoegang en probeer opnieuw.", true)
         }
 
-        val controls = controller.transportControls
+        if (action in setOf("play", "search_play", "open")) releaseCarAiAudio()
+        val controls = controller!!.transportControls
         when (action) {
             "play" -> controls.play()
             "pause" -> controls.pause()
@@ -189,7 +208,8 @@ class LocalCarTools(private val context: Context) {
             "next" -> controls.skipToNext()
             "previous" -> controls.skipToPrevious()
             "search_play" -> {
-                if (query.isNullOrBlank()) controls.play() else controls.playFromSearch(query, null)
+                val effectiveQuery = if (app == "roon_arc" && query.isNullOrBlank()) "My Tracks" else query
+                if (effectiveQuery.isNullOrBlank()) controls.play() else controls.playFromSearch(effectiveQuery, null)
             }
             "open" -> context.packageManager.getLaunchIntentForPackage(packageName)?.let {
                 it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -209,9 +229,12 @@ class LocalCarTools(private val context: Context) {
     }
 
     private fun controlActiveMedia(action: String): Result {
-        val controller = mediaControllers().firstOrNull {
-            it.packageName != context.packageName
-        } ?: return Result(true, "Ik zie geen actieve Spotify- of Roon ARC-mediasessie.")
+        val supported = setOf("com.spotify.music", "com.roon.onthego")
+        val candidates = mediaControllers().filter { it.packageName in supported }
+        val controller = candidates.firstOrNull { it.playbackState?.state == android.media.session.PlaybackState.STATE_PLAYING }
+            ?: candidates.firstOrNull()
+            ?: return Result(true, "Ik zie geen actieve Spotify- of Roon ARC-mediasessie.")
+        if (action == "play") releaseCarAiAudio()
         val controls = controller.transportControls
         when (action) {
             "play" -> controls.play()

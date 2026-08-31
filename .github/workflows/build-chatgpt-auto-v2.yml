@@ -25,6 +25,10 @@ jobs:
             cp /tmp/car_ai_launcher.png "ChatGPT-Auto-v2/app/src/main/res/mipmap-$d/ic_launcher.png"
             rm -f "ChatGPT-Auto-v2/app/src/main/res/mipmap-$d/ic_launcher.webp"
           done
+          # The checked-in drawable is intentionally a small placeholder. Use
+          # the same fully reconstructed PNG for Android Auto now-playing art;
+          # otherwise only the first strip of the truncated PNG is decoded.
+          cp /tmp/car_ai_launcher.png ChatGPT-Auto-v2/app/src/main/res/drawable/car_ai_logo.png
 
       - name: Restore stable CAR AI signing key
         run: |

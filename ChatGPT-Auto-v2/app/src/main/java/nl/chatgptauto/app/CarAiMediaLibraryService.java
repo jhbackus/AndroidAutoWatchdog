@@ -1,6 +1,8 @@
 package nl.chatgptauto.app;
 
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.annotation.Nullable;
 import androidx.media3.common.C;
@@ -47,8 +49,11 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
     private Player displayPlayer;
     private MediaLibrarySession librarySession;
     private volatile String voiceState = "Tik om CAR AI te starten";
+    private volatile String question = "Tik op Play en begin te praten";
+    private volatile String answer = "CAR AI staat klaar om te luisteren";
     private boolean previousPlayWhenReady = false;
     private byte[] cachedArtwork;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private byte[] artworkBytes() {
         if (cachedArtwork != null) return cachedArtwork;
@@ -79,8 +84,9 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
         MediaMetadata.Builder metadata = new MediaMetadata.Builder()
                 .setTitle("CAR AI")
                 .setSubtitle(voiceState)
-                .setArtist("Voice assistant")
-                .setAlbumTitle("CAR AI")
+                .setArtist("Jij: " + question + "   •   CAR AI: " + answer)
+                .setAlbumTitle("CAR AI: " + answer)
+                .setDescription("Jij: " + question + "\nCAR AI: " + answer)
                 .setIsBrowsable(false)
                 .setIsPlayable(true);
 
@@ -181,6 +187,11 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
                 voiceState = state;
                 notifyVoiceChanged();
             }
+            @Override public void onConversation(String spokenQuestion, String spokenAnswer) {
+                question = spokenQuestion;
+                answer = spokenAnswer;
+                notifyVoiceChanged();
+            }
             @Override public void onRunningChanged(boolean running) {
                 if (!running) {
                     voiceState = "Gepauzeerd — druk op Play om te praten";
@@ -192,14 +203,23 @@ public final class CarAiMediaLibraryService extends MediaLibraryService {
     }
 
     private void stopVoice() {
-        MediaVoiceController.stop();
+        MediaVoiceController.pause();
         voiceState = "Gepauzeerd — druk op Play om te praten";
         notifyVoiceChanged();
     }
 
     private void notifyVoiceChanged() {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            mainHandler.post(this::notifyVoiceChanged);
+            return;
+        }
         if (librarySession != null) {
             librarySession.notifyChildrenChanged(ROOT_ID, 1, null);
+        }
+        if (player != null && player.getMediaItemCount() > 0) {
+            boolean play = player.getPlayWhenReady();
+            player.replaceMediaItem(0, voiceItem(true));
+            player.setPlayWhenReady(play);
         }
     }
 

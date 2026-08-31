@@ -22,20 +22,27 @@ import java.util.concurrent.atomic.AtomicBoolean
 object MediaVoiceController {
     interface Listener {
         fun onState(state: String)
+        fun onConversation(question: String, answer: String)
         fun onRunningChanged(running: Boolean)
     }
 
     @Volatile private var bridge: Bridge? = null
 
-    @JvmStatic fun isRunning(): Boolean = bridge?.isRunning == true
+    @JvmStatic fun isRunning(): Boolean = bridge?.let { it.isRunning && !it.isPaused } == true
 
     @JvmStatic fun start(context: Context, listener: Listener) {
-        if (isRunning()) return
+        bridge?.let {
+            it.resume()
+            return
+        }
         val prefs = context.getSharedPreferences("chatgpt_auto", Context.MODE_PRIVATE)
         val url = prefs.getString("broker_url", BuildConfig.BROKER_URL)?.trim().orEmpty()
         val token = prefs.getString("broker_token", BuildConfig.BROKER_TOKEN)?.trim()
             ?.takeIf { it.isNotBlank() } ?: BuildConfig.BROKER_TOKEN.takeIf { it.isNotBlank() }
-        val voice = prefs.getString("voice", "marin") ?: "marin"
+        val profile = CarAiVoiceCatalog.selected(
+            prefs.getString("voice_label", null),
+            prefs.getString("voice", "coral")
+        )
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             listener.onState("Geef CAR AI eerst microfoontoestemming op de telefoon")
             listener.onRunningChanged(false)
@@ -46,7 +53,7 @@ object MediaVoiceController {
             listener.onRunningChanged(false)
             return
         }
-        bridge = Bridge(context.applicationContext, url, token, voice, listener).also { it.start() }
+        bridge = Bridge(context.applicationContext, url, token, profile, listener).also { it.start() }
     }
 
     @JvmStatic fun stop() {
@@ -54,19 +61,25 @@ object MediaVoiceController {
         bridge = null
     }
 
+    @JvmStatic fun pause() {
+        bridge?.pause("Gesprek gepauzeerd — druk op Play om verder te gaan")
+    }
+
     private class Bridge(
         private val context: Context,
         private val brokerUrl: String,
         private val brokerToken: String?,
-        private val voice: String,
+        private val voice: CarAiVoiceCatalog.Voice,
         private val listener: Listener
     ) {
         @Volatile var isRunning = false
             private set
+        @Volatile var isPaused = false
+            private set
 
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val finishing = AtomicBoolean(false)
-        private val tools = LocalCarTools(context)
+        private val tools = LocalCarTools(context) { releaseAudioForExternalApp() }
         private var ws: WebSocket? = null
         private var recorder: AudioRecord? = null
         private var output: AudioTrack? = null
@@ -80,10 +93,13 @@ object MediaVoiceController {
         @Volatile private var assistantSpeaking = false
         @Volatile private var bargeInPending = false
         @Volatile private var firstOutputAtMs = 0L
+        @Volatile private var latestQuestion = "Tik op Play en begin te praten"
+        private val currentAnswer = StringBuilder()
 
         fun start() {
             if (isRunning) return
             isRunning = true
+            isPaused = false
             finishing.set(false)
             listener.onRunningChanged(true)
             setState("Verbinden…")
@@ -104,6 +120,32 @@ object MediaVoiceController {
             bargeInPending = false
             runCatching { recorder?.stop() }
             runCatching { ws?.close(1000, "user stopped") }
+        }
+
+        fun pause(message: String) {
+            if (!isRunning || isPaused) return
+            isPaused = true
+            assistantSpeaking = false
+            bargeInPending = false
+            clearOutputAudio()
+            runCatching { recorder?.stop() }
+            releaseAudioRoute()
+            setState(message)
+            listener.onRunningChanged(false)
+        }
+
+        fun resume() {
+            if (!isRunning || !isPaused) return
+            isPaused = false
+            runCatching {
+                configureCarAudioRoute()
+                recorder?.startRecording()
+            }.onFailure {
+                setState("Audio hervatten mislukt: ${it.message ?: "onbekend"}")
+                return
+            }
+            setState(if (commDevice != null) "Ik luister via de automicrofoon…" else "Ik luister…")
+            listener.onRunningChanged(true)
         }
 
         private suspend fun connect() = suspendCancellableCoroutine<Unit> { cont ->
@@ -150,6 +192,8 @@ object MediaVoiceController {
                         "conversation.item.input_audio_transcription.completed" -> {
                             val tr = j.optString("transcript").trim()
                             if (tr.isBlank()) return
+                            latestQuestion = tr
+                            publishConversation()
                             if (assistantSpeaking || bargeInPending) {
                                 handleBargeInTranscript(webSocket, tr)
                             } else {
@@ -160,6 +204,8 @@ object MediaVoiceController {
                         "response.created" -> {
                             assistantSpeaking = true
                             bargeInPending = false
+                            synchronized(currentAnswer) { currentAnswer.setLength(0) }
+                            publishConversation()
                             firstOutputAtMs = SystemClock.elapsedRealtime()
                             setState("ChatGPT antwoordt… — zeg ‘stop’ om te onderbreken")
                         }
@@ -168,6 +214,25 @@ object MediaVoiceController {
                             val d = j.optString("delta")
                             if (d.isNotEmpty() && assistantSpeaking && !bargeInPending) {
                                 playPcm(Base64.decode(d, Base64.DEFAULT))
+                            }
+                        }
+
+                        "response.output_audio_transcript.delta", "response.audio_transcript.delta" -> {
+                            val delta = j.optString("delta")
+                            if (delta.isNotEmpty()) {
+                                synchronized(currentAnswer) { currentAnswer.append(delta) }
+                                publishConversation()
+                            }
+                        }
+
+                        "response.output_audio_transcript.done", "response.audio_transcript.done" -> {
+                            val transcript = j.optString("transcript").trim()
+                            if (transcript.isNotEmpty()) {
+                                synchronized(currentAnswer) {
+                                    currentAnswer.setLength(0)
+                                    currentAnswer.append(transcript)
+                                }
+                                publishConversation()
                             }
                         }
 
@@ -232,6 +297,15 @@ object MediaVoiceController {
                 if (result.handled) {
                     setState(result.message)
                     endAfterResponse = result.endConversation
+                    if (result.endConversation) {
+                        synchronized(currentAnswer) {
+                            currentAnswer.setLength(0)
+                            currentAnswer.append(result.message)
+                        }
+                        publishConversation()
+                        pause("Gesprek gepauzeerd — druk op Play om verder te gaan")
+                        return@launch
+                    }
                     webSocket.send(JSONObject().put("type", "response.create").put("response", JSONObject()
                         .put("output_modalities", JSONArray().put("audio"))
                         .put("instructions", "Bevestig deze uitgevoerde auto-opdracht in één korte Nederlandse zin: ${result.message}")).toString())
@@ -258,11 +332,11 @@ object MediaVoiceController {
                     .put("interrupt_response", false))
             val out = JSONObject()
                 .put("format", JSONObject().put("type", "audio/pcm").put("rate", 24000))
-                .put("voice", voice)
+                .put("voice", voice.realtimeVoice)
             return JSONObject().put("type", "session.update").put("session", JSONObject()
                 .put("type", "realtime")
                 .put("model", "gpt-realtime-2.1")
-                .put("instructions", "Je bent CAR AI in de auto. Spreek Nederlands, natuurlijk en bondig. Voer lokale navigatie-, bel-, Spotify- en Roon ARC-opdrachten uit via de app.")
+                .put("instructions", "Je bent CAR AI in de auto. Spreek uitsluitend Nederlands, natuurlijk en bondig, met een ${voice.direction} stemkarakter. Voer lokale navigatie-, bel-, Spotify- en Roon ARC-opdrachten uit via de app.")
                 .put("output_modalities", JSONArray().put("audio"))
                 .put("audio", JSONObject().put("input", input).put("output", out)))
         }
@@ -287,7 +361,7 @@ object MediaVoiceController {
                 .build()
             val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
                 .setAudioAttributes(attrs)
-                .setOnAudioFocusChangeListener { if (it == AudioManager.AUDIOFOCUS_LOSS) stop() }
+                .setOnAudioFocusChangeListener { if (it == AudioManager.AUDIOFOCUS_LOSS) pause("Gesprek gepauzeerd") }
                 .build()
             focusRequest = req
             if (am.requestAudioFocus(req) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
@@ -319,6 +393,11 @@ object MediaVoiceController {
             setState(if (commDevice != null) "Ik luister via de automicrofoon…" else "Ik luister…")
             val buf = ByteArray(4096)
             while (isRunning) {
+                if (isPaused) {
+                    Thread.sleep(120)
+                    continue
+                }
+                if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) rec.startRecording()
                 val n = rec.read(buf, 0, buf.size)
                 if (n <= 0) continue
                 val pcm24 = resample16to24(buf, n)
@@ -380,8 +459,36 @@ object MediaVoiceController {
             scope.launch(Dispatchers.Main) { listener.onState(s) }
         }
 
+        private fun releaseAudioForExternalApp() {
+            pause("Gesprek gepauzeerd — druk op Play om verder te gaan")
+        }
+
+        private fun releaseAudioRoute() {
+            val am = audioManager
+            val request = focusRequest
+            if (am != null && request != null) runCatching { am.abandonAudioFocusRequest(request) }
+            if (am != null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) runCatching { am.clearCommunicationDevice() }
+                else {
+                    @Suppress("DEPRECATION")
+                    runCatching { am.stopBluetoothSco(); am.isBluetoothScoOn = false }
+                }
+                runCatching { am.mode = previousMode }
+            }
+            focusRequest = null
+            commDevice = null
+        }
+
+        private fun publishConversation() {
+            val answer = synchronized(currentAnswer) { currentAnswer.toString().trim() }
+            scope.launch(Dispatchers.Main) {
+                listener.onConversation(latestQuestion, answer.ifBlank { "…" })
+            }
+        }
+
         private fun cleanup() {
             isRunning = false
+            isPaused = false
             assistantSpeaking = false
             bargeInPending = false
             runCatching { echoCanceler?.release() }; echoCanceler = null

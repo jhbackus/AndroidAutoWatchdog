@@ -24,7 +24,10 @@ public class MainActivity extends Activity {
     private String lastStep = "";
 
     private final Shizuku.OnBinderReceivedListener binderReceived = () -> { ShizukuBridge.bind(); lastStep = ""; refresh(); continueSoon(); };
-    private final Shizuku.OnBinderDeadListener binderDead = () -> {\n        LogStore.add(this, "Shizuku-server gestopt. Na een telefoonherstart moet Shizuku opnieuw worden gestart.");\n        refresh();\n    };
+    private final Shizuku.OnBinderDeadListener binderDead = () -> {
+        LogStore.add(this, "Shizuku-server gestopt. Na een telefoonherstart moet Shizuku opnieuw worden gestart.");
+        refresh();
+    };
     private final Shizuku.OnRequestPermissionResultListener permissionResult = (requestCode, grantResult) -> {
         if (requestCode == ShizukuBridge.REQ) {
             LogStore.add(this, grantResult == PackageManager.PERMISSION_GRANTED ? "Shizuku-toestemming verleend." : "Shizuku-toestemming geweigerd.");

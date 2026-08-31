@@ -109,7 +109,7 @@ public class MainActivity extends Activity {
     private int dp(int n) { return Math.round(n * getResources().getDisplayMetrics().density); }
 
     @Override protected void onResume() { super.onResume(); ShizukuBridge.bind(); refresh(); if (setupStarted && !LogStore.isSetupComplete(this)) continueSoon(); }
-    @Override protected void onDestroy() { statusHandler.removeCallbacksAndMessages(null); try { Shizuku.removeBinderReceivedListener(binderReceived); Shizuku.removeBinderDeadListener(binderDead); Shizuku.removeRequestPermissionResultListener(permissionResult); } catch (Throwable ignored) {} super.onDestroy(); }
+    @Override protected void onDestroy() { try { Shizuku.removeBinderReceivedListener(binderReceived); Shizuku.removeBinderDeadListener(binderDead); Shizuku.removeRequestPermissionResultListener(permissionResult); } catch (Throwable ignored) {} super.onDestroy(); }
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) { super.onRequestPermissionsResult(requestCode, permissions, results); if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) lastStep = ""; refresh(); continueSoon(); }
 
     private void continueSoon() { new Handler(Looper.getMainLooper()).postDelayed(() -> { if (!isFinishing() && setupStarted && !LogStore.isSetupComplete(this)) continueSetup(); }, 650); }
